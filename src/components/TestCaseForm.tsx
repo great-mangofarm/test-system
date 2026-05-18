@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,20 +47,40 @@ export function TestCaseForm({ suiteId, initial, onSave, onCancel }: Props) {
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
-    setUploading(true)
-    try {
-      const urls = await Promise.all(files.map((f) => uploadImage(f, suiteId)))
-      set('images', [...form.images, ...urls])
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
+    await uploadFiles(files)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   function removeImage(url: string) {
     set('images', form.images.filter((u) => u !== url))
   }
+
+  async function uploadFiles(files: File[]) {
+    if (!files.length) return
+    setUploading(true)
+    try {
+      const urls = await Promise.all(files.map((f) => uploadImage(f, suiteId)))
+      setForm((f) => ({ ...f, images: [...f.images, ...urls] }))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const imageFiles = items
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => f !== null)
+      if (imageFiles.length) {
+        e.preventDefault()
+        uploadFiles(imageFiles)
+      }
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [suiteId])
 
   async function handleSave() {
     if (!form.title.trim()) return
@@ -178,7 +198,7 @@ export function TestCaseForm({ suiteId, initial, onSave, onCancel }: Props) {
 
           {/* Images */}
           <div className="space-y-2">
-            <Label>이미지 첨부</Label>
+            <Label>이미지 첨부 <span className="text-xs text-slate-400 font-normal">— 클릭하여 선택하거나 Ctrl+V로 붙여넣기</span></Label>
             <div className="flex flex-wrap gap-2">
               {form.images.map((url) => (
                 <div key={url} className="relative group">
