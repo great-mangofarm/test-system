@@ -13,8 +13,8 @@ import { TestCaseForm } from '@/components/TestCaseForm'
 import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase } from '@/lib/firestore'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus } from '@/types'
 import {
-  PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_LABELS, TEST_STATUS_COLORS,
-  PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
+  PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_COLORS,
+  PROCESSING_STATUS_COLORS,
 } from '@/lib/constants'
 import { toast } from '@/hooks/use-toast'
 import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp } from 'lucide-react'
@@ -25,7 +25,7 @@ type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'u
 export default function TestCasesPage() {
   const { productId, suiteId } = useParams<{ productId: string; suiteId: string }>()
   const navigate = useNavigate()
-  const [product, setProduct] = useState<Product | null>(null)
+  const [_product, setProduct] = useState<Product | null>(null)
   const [suite, setSuite] = useState<TestSuite | null>(null)
   const [cases, setCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(true)
@@ -151,7 +151,6 @@ export default function TestCasesPage() {
             {dialogOpen && (
               <TestCaseForm
                 suiteId={suiteId!}
-                productId={productId!}
                 initial={editTarget ?? undefined}
                 onSave={handleSave}
                 onCancel={() => setDialogOpen(false)}

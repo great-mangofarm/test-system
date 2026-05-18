@@ -7,13 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { uploadImage } from '@/lib/firestore'
 import type { TestCase, Priority, TestStatus, ProcessingStatus } from '@/types'
-import { ImagePlus, X, ExternalLink, Loader2 } from 'lucide-react'
+import { ImagePlus, X, Loader2 } from 'lucide-react'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
 
 interface Props {
   suiteId: string
-  productId: string
   initial?: Partial<FormData>
   onSave: (data: FormData) => Promise<void>
   onCancel: () => void
@@ -35,7 +34,7 @@ const defaultForm: FormData = {
   priority: 'medium',
 }
 
-export function TestCaseForm({ suiteId, productId, initial, onSave, onCancel }: Props) {
+export function TestCaseForm({ suiteId, initial, onSave, onCancel }: Props) {
   const [form, setForm] = useState<FormData>({ ...defaultForm, ...initial })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
