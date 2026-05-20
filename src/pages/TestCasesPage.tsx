@@ -43,6 +43,8 @@ export default function TestCasesPage() {
   const [deleteTarget, setDeleteTarget] = useState<TestCase | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteValue, setNoteValue] = useState('')
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('all')
@@ -135,6 +137,13 @@ export default function TestCasesPage() {
   async function quickUpdateProcessing(id: string, status: ProcessingStatus) {
     await updateTestCase(id, { processingStatus: status })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, processingStatus: status } : c))
+  }
+
+  async function saveNote(id: string) {
+    await updateTestCase(id, { developerNote: noteValue })
+    setCases((prev) => prev.map((c) => c.id === id ? { ...c, developerNote: noteValue } : c))
+    setEditingNoteId(null)
+    toast({ title: '개발자 코멘트 저장됨' })
   }
 
   async function quickUpdateStatus(id: string, status: TestStatus) {
@@ -424,12 +433,31 @@ export default function TestCasesPage() {
                           </div>
 
                           {/* Developer Note */}
-                          {tc.developerNote && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">개발자 메모</p>
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">개발자 코멘트</p>
+                            {canEditStatus ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  className="w-full text-sm text-slate-700 bg-white border border-blue-200 rounded-md p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                  rows={3}
+                                  placeholder="개발자 코멘트를 입력하세요..."
+                                  value={editingNoteId === tc.id ? noteValue : tc.developerNote}
+                                  onFocus={() => { setEditingNoteId(tc.id); setNoteValue(tc.developerNote) }}
+                                  onChange={(e) => setNoteValue(e.target.value)}
+                                />
+                                {editingNoteId === tc.id && (
+                                  <div className="flex gap-2">
+                                    <Button size="sm" className="h-7 text-xs" onClick={() => saveNote(tc.id)}>저장</Button>
+                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingNoteId(null) }}>취소</Button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : tc.developerNote ? (
                               <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-blue-50 border border-blue-100 rounded-md p-3">{tc.developerNote}</p>
-                            </div>
-                          )}
+                            ) : (
+                              <p className="text-slate-400 text-sm">-</p>
+                            )}
+                          </div>
 
                           {/* Images */}
                           {tc.images.length > 0 && (
