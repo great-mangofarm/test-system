@@ -12,12 +12,15 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { getProducts, getSuites, createSuite, updateSuite, deleteSuite } from '@/lib/firestore'
+import { useAuth } from '@/store/auth'
 import type { Product, TestSuite } from '@/types'
 import { Plus, ClipboardList, ArrowRight, Pencil, Trash2, ChevronLeft } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 export default function SuitesPage() {
   const { productId } = useParams<{ productId: string }>()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [product, setProduct] = useState<Product | null>(null)
   const [suites, setSuites] = useState<TestSuite[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,42 +90,44 @@ export default function SuitesPage() {
           <span className="text-slate-300">/</span>
           <h1 className="text-lg font-bold text-slate-800">{product?.name ?? '...'}</h1>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate} size="sm">
-              <Plus /> 테스트 묶음 추가
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editTarget ? '테스트 묶음 수정' : '새 테스트 묶음'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label>이름 *</Label>
-                <Input
-                  placeholder="예: v2.1 릴리즈 테스트"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>버전/태그</Label>
-                <Input
-                  placeholder="예: v2.1.0"
-                  value={form.version}
-                  onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
-              <Button onClick={handleSave} disabled={!form.name.trim() || saving}>
-                {saving ? '저장 중...' : '저장'}
+        {isAdmin && (
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openCreate} size="sm">
+                <Plus /> 테스트 묶음 추가
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editTarget ? '테스트 묶음 수정' : '새 테스트 묶음'}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>이름 *</Label>
+                  <Input
+                    placeholder="예: v2.1 릴리즈 테스트"
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>버전/태그</Label>
+                  <Input
+                    placeholder="예: v2.1.0"
+                    value={form.version}
+                    onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
+                <Button onClick={handleSave} disabled={!form.name.trim() || saving}>
+                  {saving ? '저장 중...' : '저장'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
@@ -139,7 +144,7 @@ export default function SuitesPage() {
           <div className="text-center py-20 text-slate-400">
             <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-40" />
             <p>테스트 묶음이 없습니다</p>
-            <Button className="mt-4" onClick={openCreate}><Plus /> 테스트 묶음 추가</Button>
+            {isAdmin && <Button className="mt-4" onClick={openCreate}><Plus /> 테스트 묶음 추가</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -150,6 +155,7 @@ export default function SuitesPage() {
                     <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
                       <ClipboardList className="w-5 h-5 text-blue-600" />
                     </div>
+                    {isAdmin && (
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
                         <Pencil className="w-3.5 h-3.5" />
@@ -176,6 +182,7 @@ export default function SuitesPage() {
                         </AlertDialogContent>
                       </AlertDialog>
                     </div>
+                    )}
                   </div>
                   <CardTitle className="text-base mt-2">{s.name}</CardTitle>
                   {s.version && <CardDescription className="text-xs">{s.version}</CardDescription>}

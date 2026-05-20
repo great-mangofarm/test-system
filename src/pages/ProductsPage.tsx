@@ -13,12 +13,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { getProducts, createProduct, updateProduct, deleteProduct } from '@/lib/firestore'
-import { logout } from '@/store/auth'
+import { useAuth, logout } from '@/store/auth'
 import type { Product } from '@/types'
-import { Plus, Package, ArrowRight, Pencil, Trash2, LogOut } from 'lucide-react'
+import { Plus, Package, ArrowRight, Pencil, Trash2, LogOut, Users } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 
 export default function ProductsPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -71,22 +73,32 @@ export default function ProductsPage() {
     await load()
   }
 
-  function handleLogout() {
-    logout()
+  async function handleLogout() {
+    await logout()
     navigate('/login')
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-800">QA 테스트 시스템</h1>
+        <div>
+          <h1 className="text-xl font-bold text-slate-800">QA 테스트 시스템</h1>
+          <p className="text-xs text-slate-400">{user?.displayName} · {user?.role === 'admin' ? '관리자' : user?.role === 'developer' ? '개발자' : '뷰어'}</p>
+        </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
+              <Users /> 사용자 관리
+            </Button>
+          )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            {isAdmin && (
             <DialogTrigger asChild>
               <Button onClick={openCreate} size="sm">
                 <Plus /> 프로덕트 추가
               </Button>
             </DialogTrigger>
+            )}
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editTarget ? '프로덕트 수정' : '새 프로덕트'}</DialogTitle>
@@ -140,7 +152,7 @@ export default function ProductsPage() {
           <div className="text-center py-20 text-slate-400">
             <Package className="w-12 h-12 mx-auto mb-3 opacity-40" />
             <p>등록된 프로덕트가 없습니다</p>
-            <Button className="mt-4" onClick={openCreate}><Plus /> 첫 프로덕트 추가</Button>
+            {isAdmin && <Button className="mt-4" onClick={openCreate}><Plus /> 첫 프로덕트 추가</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -151,6 +163,7 @@ export default function ProductsPage() {
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                       <Package className="w-5 h-5 text-primary" />
                     </div>
+                    {isAdmin && (
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(p)}>
                         <Pencil className="w-3.5 h-3.5" />
@@ -177,6 +190,7 @@ export default function ProductsPage() {
                         </AlertDialogContent>
                       </AlertDialog>
                     </div>
+                    )}
                   </div>
                   <CardTitle className="text-base mt-2">{p.name}</CardTitle>
                   {p.description && <CardDescription className="text-xs line-clamp-2">{p.description}</CardDescription>}

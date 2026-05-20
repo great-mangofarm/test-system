@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TestCaseForm } from '@/components/TestCaseForm'
 import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase } from '@/lib/firestore'
+import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus } from '@/types'
 import {
   PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_COLORS,
@@ -25,6 +26,9 @@ type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'u
 export default function TestCasesPage() {
   const { productId, suiteId } = useParams<{ productId: string; suiteId: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const canEditStatus = user?.role === 'admin' || user?.role === 'developer'
   const [_product, setProduct] = useState<Product | null>(null)
   const [suite, setSuite] = useState<TestSuite | null>(null)
   const [cases, setCases] = useState<TestCase[]>([])
@@ -145,9 +149,11 @@ export default function TestCasesPage() {
             {suite?.version && <Badge variant="outline">{suite.version}</Badge>}
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openCreate} size="sm"><Plus /> 테스트 케이스 추가</Button>
-            </DialogTrigger>
+            {isAdmin && (
+              <DialogTrigger asChild>
+                <Button onClick={openCreate} size="sm"><Plus /> 테스트 케이스 추가</Button>
+              </DialogTrigger>
+            )}
             {dialogOpen && (
               <TestCaseForm
                 suiteId={suiteId!}
@@ -226,7 +232,7 @@ export default function TestCasesPage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
             <p>테스트 케이스가 없습니다</p>
-            <Button className="mt-4" onClick={openCreate}><Plus /> 테스트 케이스 추가</Button>
+            {isAdmin && <Button className="mt-4" onClick={openCreate}><Plus /> 테스트 케이스 추가</Button>}
           </div>
         ) : (
           filtered.map((tc, idx) => (
@@ -258,31 +264,43 @@ export default function TestCasesPage() {
                   </span>
                 )}
 
-                {/* Test Status Selector */}
-                <Select value={tc.status} onValueChange={(v) => quickUpdateStatus(tc.id, v as TestStatus)}>
-                  <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="not_tested">미테스트</SelectItem>
-                    <SelectItem value="pass">통과</SelectItem>
-                    <SelectItem value="fail">실패</SelectItem>
-                    <SelectItem value="blocked">블로킹</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Test Status Selector - admin + developer */}
+                {canEditStatus ? (
+                  <Select value={tc.status} onValueChange={(v) => quickUpdateStatus(tc.id, v as TestStatus)}>
+                    <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not_tested">미테스트</SelectItem>
+                      <SelectItem value="pass">통과</SelectItem>
+                      <SelectItem value="fail">실패</SelectItem>
+                      <SelectItem value="blocked">블로킹</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
+                    {tc.status === 'not_tested' ? '미테스트' : tc.status === 'pass' ? '통과' : tc.status === 'fail' ? '실패' : '블로킹'}
+                  </span>
+                )}
 
-                {/* Processing Status Selector */}
-                <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
-                  <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">미처리</SelectItem>
-                    <SelectItem value="in_progress">처리중</SelectItem>
-                    <SelectItem value="resolved">처리완료</SelectItem>
-                    <SelectItem value="wont_fix">보류</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Processing Status Selector - admin only */}
+                {isAdmin ? (
+                  <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
+                    <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">미처리</SelectItem>
+                      <SelectItem value="in_progress">처리중</SelectItem>
+                      <SelectItem value="resolved">처리완료</SelectItem>
+                      <SelectItem value="wont_fix">보류</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
+                    {tc.processingStatus === 'pending' ? '미처리' : tc.processingStatus === 'in_progress' ? '처리중' : tc.processingStatus === 'resolved' ? '처리완료' : '보류'}
+                  </span>
+                )}
 
                 <div className="flex gap-1 shrink-0">
                   {tc.ticketLink && (
@@ -292,12 +310,16 @@ export default function TestCasesPage() {
                       </Button>
                     </a>
                   )}
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(tc)}>
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(tc)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {isAdmin && (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(tc)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(tc)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  )}
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleExpand(tc.id)}>
                     {expanded.has(tc.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </Button>

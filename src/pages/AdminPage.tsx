@@ -1,0 +1,132 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { useAuth, logout } from '@/store/auth'
+import type { UserProfile, UserRole } from '@/types'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { toast } from '@/hooks/use-toast'
+import { ChevronLeft, LogOut, Users } from 'lucide-react'
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: '관리자',
+  developer: '개발자',
+  viewer: '뷰어',
+}
+
+const ROLE_COLORS: Record<UserRole, string> = {
+  admin: 'bg-red-100 text-red-700',
+  developer: 'bg-blue-100 text-blue-700',
+  viewer: 'bg-slate-100 text-slate-600',
+}
+
+export default function AdminPage() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState<string | null>(null)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const snap = await getDocs(collection(db, 'users'))
+      const list = snap.docs.map((d) => d.data() as UserProfile)
+      list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      setUsers(list)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleRoleChange(uid: string, role: UserRole) {
+    setUpdating(uid)
+    try {
+      await updateDoc(doc(db, 'users', uid), { role })
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role } : u)))
+      toast({ title: '권한이 변경되었습니다' })
+    } catch {
+      toast({ title: '권한 변경 실패', variant: 'destructive' })
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  async function handleLogout() {
+    await logout()
+    navigate('/login')
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h1 className="text-xl font-bold text-slate-800">사용자 관리</h1>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleLogout}>
+          <LogOut /> 로그아웃
+        </Button>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-6 py-8">
+        <p className="text-sm text-slate-500 mb-6">
+          총 {users.length}명 · 로그인: {user?.email}
+        </p>
+
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 rounded-lg bg-slate-200 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {users.map((u) => (
+              <div
+                key={u.uid}
+                className="bg-white rounded-lg border px-5 py-4 flex items-center justify-between"
+              >
+                <div>
+                  <p className="font-medium text-slate-800">{u.displayName}</p>
+                  <p className="text-sm text-slate-500">{u.email}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {u.uid === user?.uid ? (
+                    <Badge className={ROLE_COLORS[u.role]}>
+                      {ROLE_LABELS[u.role]} (나)
+                    </Badge>
+                  ) : (
+                    <Select
+                      value={u.role}
+                      onValueChange={(v) => handleRoleChange(u.uid, v as UserRole)}
+                      disabled={updating === u.uid}
+                    >
+                      <SelectTrigger className="w-32 h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">관리자</SelectItem>
+                        <SelectItem value="developer">개발자</SelectItem>
+                        <SelectItem value="viewer">뷰어</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}

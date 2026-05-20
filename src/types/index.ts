@@ -1,3 +1,13 @@
+export type UserRole = 'admin' | 'developer' | 'viewer'
+
+export interface UserProfile {
+  uid: string
+  email: string
+  displayName: string
+  role: UserRole
+  createdAt: string
+}
+
 export type Priority = 'critical' | 'high' | 'medium' | 'low'
 export type TestStatus = 'pass' | 'fail' | 'blocked' | 'not_tested'
 export type ProcessingStatus = 'pending' | 'in_progress' | 'resolved' | 'wont_fix'

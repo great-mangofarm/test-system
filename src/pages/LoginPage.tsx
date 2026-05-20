@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -8,19 +8,24 @@ import { login } from '@/store/auth'
 import { Lock } from 'lucide-react'
 
 export default function LoginPage() {
-  const [id, setId] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(false)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (login(id, password, remember)) {
+    setLoading(true)
+    setError('')
+    try {
+      await login(email, password)
       navigate('/')
-    } else {
-      setError(true)
+    } catch {
+      setError('이메일 또는 비밀번호가 올바르지 않습니다')
       setPassword('')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -37,13 +42,13 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="id">아이디</Label>
+              <Label htmlFor="email">이메일</Label>
               <Input
-                id="id"
-                type="text"
-                placeholder="아이디 입력"
-                value={id}
-                onChange={(e) => { setId(e.target.value); setError(false) }}
+                id="email"
+                type="email"
+                placeholder="이메일 입력"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError('') }}
                 autoFocus
               />
             </div>
@@ -54,25 +59,19 @@ export default function LoginPage() {
                 type="password"
                 placeholder="비밀번호 입력"
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(false) }}
+                onChange={(e) => { setPassword(e.target.value); setError('') }}
               />
-              {error && <p className="text-sm text-destructive">아이디 또는 비밀번호가 올바르지 않습니다</p>}
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="remember"
-                type="checkbox"
-                className="w-4 h-4 accent-primary cursor-pointer"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-              />
-              <Label htmlFor="remember" className="cursor-pointer font-normal text-slate-600">
-                로그인 유지
-              </Label>
-            </div>
-            <Button type="submit" className="w-full" disabled={!id || !password}>
-              로그인
+            <Button type="submit" className="w-full" disabled={!email || !password || loading}>
+              {loading ? '로그인 중...' : '로그인'}
             </Button>
+            <p className="text-center text-sm text-slate-500">
+              계정이 없으신가요?{' '}
+              <Link to="/register" className="text-primary hover:underline">
+                회원가입
+              </Link>
+            </p>
           </form>
         </CardContent>
       </Card>
