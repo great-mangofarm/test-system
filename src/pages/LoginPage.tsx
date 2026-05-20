@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { login } from '@/store/auth'
-import { Lock } from 'lucide-react'
+import { Lock, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -39,7 +40,7 @@ export default function LoginPage() {
           <CardTitle className="text-2xl">QA 테스트 시스템</CardTitle>
           <CardDescription>계정 정보를 입력하세요</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">이메일</Label>
@@ -54,25 +55,45 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">비밀번호</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="비밀번호 입력"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError('') }}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="비밀번호 입력"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError('') }}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <Button type="submit" className="w-full" disabled={!email || !password || loading}>
               {loading ? '로그인 중...' : '로그인'}
             </Button>
-            <p className="text-center text-sm text-slate-500">
-              계정이 없으신가요?{' '}
-              <Link to="/register" className="text-primary hover:underline">
-                회원가입
-              </Link>
-            </p>
           </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-slate-400">또는</span>
+            </div>
+          </div>
+
+          <Link to="/register">
+            <Button variant="outline" className="w-full">
+              회원가입
+            </Button>
+          </Link>
         </CardContent>
       </Card>
     </div>
