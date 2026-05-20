@@ -5,6 +5,11 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  updatePassword,
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
@@ -44,7 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export async function login(email: string, password: string): Promise<void> {
+export async function login(email: string, password: string, remember: boolean): Promise<void> {
+  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence)
   await signInWithEmailAndPassword(auth, email, password)
 }
 
@@ -62,4 +68,13 @@ export async function register(email: string, password: string, displayName: str
 
 export async function logout(): Promise<void> {
   await signOut(auth)
+}
+
+export async function changePassword(newPassword: string): Promise<void> {
+  if (!auth.currentUser) throw new Error('not_logged_in')
+  await updatePassword(auth.currentUser, newPassword)
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email)
 }

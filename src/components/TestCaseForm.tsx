@@ -8,6 +8,7 @@ import { DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/compon
 import { uploadImage } from '@/lib/firestore'
 import type { TestCase, Priority, TestStatus, ProcessingStatus } from '@/types'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
 
@@ -40,6 +41,7 @@ export function TestCaseForm({ suiteId, initial, onSave, onCancel }: Props) {
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const { toast } = useToast()
 
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -59,8 +61,10 @@ export function TestCaseForm({ suiteId, initial, onSave, onCancel }: Props) {
     if (!files.length) return
     setUploading(true)
     try {
-      const urls = await Promise.all(files.map((f) => uploadImage(f, suiteId)))
+      const urls = await Promise.all(files.map((f) => uploadImage(f)))
       setForm((f) => ({ ...f, images: [...f.images, ...urls] }))
+    } catch (e) {
+      toast({ variant: 'destructive', title: '이미지 업로드 실패', description: String(e) })
     } finally {
       setUploading(false)
     }

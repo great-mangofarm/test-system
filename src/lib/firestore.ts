@@ -7,21 +7,27 @@ import {
   getDocs,
   query,
   where,
+  writeBatch,
 } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
-import { db, storage } from './firebase'
+import { db } from './firebase'
 import type { Product, TestSuite, TestCase } from '@/types'
 
 // --- Products ---
 export async function getProducts(): Promise<Product[]> {
   const snap = await getDocs(collection(db, 'products'))
   const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product))
-  return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
 }
 
-export async function createProduct(data: Omit<Product, 'id' | 'createdAt'>): Promise<string> {
-  const ref = await addDoc(collection(db, 'products'), { ...data, createdAt: new Date().toISOString() })
+export async function createProduct(data: Omit<Product, 'id' | 'createdAt' | 'order'>, order: number): Promise<string> {
+  const ref = await addDoc(collection(db, 'products'), { ...data, order, createdAt: new Date().toISOString() })
   return ref.id
+}
+
+export async function reorderProducts(ids: string[]): Promise<void> {
+  const batch = writeBatch(db)
+  ids.forEach((id, i) => batch.update(doc(db, 'products', id), { order: i }))
+  await batch.commit()
 }
 
 export async function updateProduct(id: string, data: Partial<Product>): Promise<void> {
@@ -38,12 +44,18 @@ export async function getSuites(productId: string): Promise<TestSuite[]> {
     query(collection(db, 'suites'), where('productId', '==', productId))
   )
   const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TestSuite))
-  return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
 }
 
-export async function createSuite(data: Omit<TestSuite, 'id' | 'createdAt'>): Promise<string> {
-  const ref = await addDoc(collection(db, 'suites'), { ...data, createdAt: new Date().toISOString() })
+export async function createSuite(data: Omit<TestSuite, 'id' | 'createdAt' | 'order'>, order: number): Promise<string> {
+  const ref = await addDoc(collection(db, 'suites'), { ...data, order, createdAt: new Date().toISOString() })
   return ref.id
+}
+
+export async function reorderSuites(ids: string[]): Promise<void> {
+  const batch = writeBatch(db)
+  ids.forEach((id, i) => batch.update(doc(db, 'suites', id), { order: i }))
+  await batch.commit()
 }
 
 export async function updateSuite(id: string, data: Partial<TestSuite>): Promise<void> {
@@ -80,18 +92,26 @@ export async function bulkCreateTestCases(cases: Omit<TestCase, 'id'>[]): Promis
   await Promise.all(cases.map((c) => addDoc(collection(db, 'testcases'), c)))
 }
 
-// --- Image Upload ---
-export async function uploadImage(file: File, suiteId: string): Promise<string> {
-  const storageRef = ref(storage, `test-images/${suiteId}/${Date.now()}_${file.name}`)
-  await uploadBytes(storageRef, file)
-  return getDownloadURL(storageRef)
+// --- Image Upload (Cloudinary) ---
+const CLOUDINARY_CLOUD_NAME = 'drz0oj86f'
+const CLOUDINARY_UPLOAD_PRESET = 'issue_tracker'
+
+export async function uploadImage(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error?.message ?? '이미지 업로드 실패')
+  return data.secure_url
 }
 
 export async function deleteImage(url: string): Promise<void> {
-  try {
-    const storageRef = ref(storage, url)
-    await deleteObject(storageRef)
-  } catch {
-    // ignore if already deleted
-  }
+  // Cloudinary 이미지 삭제는 서버사이드 서명이 필요하므로 클라이언트에서는 생략
+  console.log('deleteImage skipped (Cloudinary):', url)
 }

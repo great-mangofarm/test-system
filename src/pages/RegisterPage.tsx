@@ -9,7 +9,8 @@ import { UserPlus, Eye, EyeOff } from 'lucide-react'
 
 export default function RegisterPage() {
   const [displayName, setDisplayName] = useState('')
-  const [email, setEmail] = useState('')
+  const [emailLocal, setEmailLocal] = useState('')
+  const email = `${emailLocal}@everon.co.kr`
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -20,6 +21,10 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!emailLocal.trim()) {
+      setError('이메일을 입력해주세요')
+      return
+    }
     if (password !== confirm) {
       setError('비밀번호가 일치하지 않습니다')
       return
@@ -38,7 +43,7 @@ export default function RegisterPage() {
       if (code === 'auth/email-already-in-use') {
         setError('이미 사용 중인 이메일입니다')
       } else {
-        setError('회원가입에 실패했습니다. 다시 시도해주세요')
+        setError('계정 등록에 실패했습니다. 다시 시도해주세요')
       }
     } finally {
       setLoading(false)
@@ -52,8 +57,8 @@ export default function RegisterPage() {
           <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
             <UserPlus className="w-6 h-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">회원가입</CardTitle>
-          <CardDescription>가입 후 뷰어 권한으로 시작합니다</CardDescription>
+          <CardTitle className="text-2xl">계정 등록</CardTitle>
+          <CardDescription>등록 후 뷰어 권한으로 시작합니다</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -70,13 +75,19 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">이메일</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="이메일 입력"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError('') }}
-              />
+              <div className="flex">
+                <Input
+                  id="email"
+                  type="text"
+                  placeholder="example"
+                  value={emailLocal}
+                  onChange={(e) => { setEmailLocal(e.target.value); setError('') }}
+                  className="rounded-r-none border-r-0"
+                />
+                <span className="flex items-center px-3 bg-slate-50 border border-slate-200 rounded-r-md text-sm text-slate-500 whitespace-nowrap">
+                  @everon.co.kr
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">비밀번호</Label>
@@ -124,14 +135,14 @@ export default function RegisterPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={!displayName || !email || !password || !confirm || loading}
+              disabled={!displayName || !emailLocal || !password || !confirm || loading}
             >
-              {loading ? '가입 중...' : '가입하기'}
+              {loading ? '등록 중...' : '등록하기'}
             </Button>
             <p className="text-center text-sm text-slate-500">
               이미 계정이 있으신가요?{' '}
               <Link to="/login" className="text-primary hover:underline">
-                로그인
+                로그인하기
               </Link>
             </p>
           </form>

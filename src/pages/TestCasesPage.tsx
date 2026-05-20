@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,14 +14,19 @@ import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, d
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus } from '@/types'
 import {
-  PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_COLORS,
-  PROCESSING_STATUS_COLORS,
+  PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_LABELS, TEST_STATUS_COLORS,
+  PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
 } from '@/lib/constants'
 import { toast } from '@/hooks/use-toast'
-import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
+
+function formatDate(iso: string) {
+  if (!iso) return '-'
+  return iso.slice(0, 10)
+}
 
 export default function TestCasesPage() {
   const { productId, suiteId } = useParams<{ productId: string; suiteId: string }>()
@@ -44,6 +49,8 @@ export default function TestCasesPage() {
   const [filterProcessing, setFilterProcessing] = useState('all')
   const [filterArea, setFilterArea] = useState('all')
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   useEffect(() => { load() }, [productId, suiteId])
 
@@ -68,6 +75,8 @@ export default function TestCasesPage() {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false
     if (filterProcessing !== 'all' && c.processingStatus !== filterProcessing) return false
     if (filterArea !== 'all' && c.area !== filterArea) return false
+    if (dateFrom && c.createdAt.slice(0, 10) < dateFrom) return false
+    if (dateTo && c.createdAt.slice(0, 10) > dateTo) return false
     if (search && !c.title.toLowerCase().includes(search.toLowerCase()) && !c.area.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
@@ -102,14 +111,14 @@ export default function TestCasesPage() {
     if (!productId || !suiteId) return
     if (editTarget) {
       await updateTestCase(editTarget.id, data)
-      toast({ title: '테스트 케이스 수정 완료' })
+      toast({ title: '수정 완료' })
     } else {
       const order = cases.length > 0 ? Math.max(...cases.map((c) => c.order)) + 1 : 0
       await createTestCase({
         ...data, suiteId, productId, order,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       })
-      toast({ title: '테스트 케이스 추가 완료' })
+      toast({ title: '추가 완료' })
     }
     setDialogOpen(false)
     await load()
@@ -118,7 +127,7 @@ export default function TestCasesPage() {
   async function handleDelete() {
     if (!deleteTarget) return
     await deleteTestCase(deleteTarget.id)
-    toast({ title: '테스트 케이스 삭제됨', variant: 'destructive' })
+    toast({ title: '삭제됨', variant: 'destructive' })
     setDeleteTarget(null)
     await load()
   }
@@ -136,13 +145,13 @@ export default function TestCasesPage() {
   const passRate = stats.total > 0 ? Math.round((stats.pass / stats.total) * 100) : 0
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b px-6 py-4">
+      <header className="bg-white border-b px-8 py-4 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/products/${productId}/suites`)} className="text-slate-500 hover:text-slate-800">
-              <ChevronLeft className="w-4 h-4" /> 테스트 묶음
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="text-slate-500 hover:text-slate-800">
+              <ChevronLeft className="w-4 h-4" /> 목록으로
             </Button>
             <span className="text-slate-300">/</span>
             <h1 className="text-lg font-bold text-slate-800">{suite?.name ?? '...'}</h1>
@@ -151,7 +160,7 @@ export default function TestCasesPage() {
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             {isAdmin && (
               <DialogTrigger asChild>
-                <Button onClick={openCreate} size="sm"><Plus /> 테스트 케이스 추가</Button>
+                <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1" /> 항목 추가</Button>
               </DialogTrigger>
             )}
             {dialogOpen && (
@@ -167,7 +176,7 @@ export default function TestCasesPage() {
       </header>
 
       {/* Stats Bar */}
-      <div className="bg-white border-b px-6 py-3">
+      <div className="bg-white border-b px-8 py-2.5 shrink-0">
         <div className="flex items-center gap-6 text-sm">
           <span className="text-slate-500">전체 <strong className="text-slate-800">{stats.total}</strong></span>
           <span className="text-green-700">통과 <strong>{stats.pass}</strong></span>
@@ -178,21 +187,21 @@ export default function TestCasesPage() {
             <div className="w-32 h-2 rounded-full bg-slate-200 overflow-hidden">
               <div className="h-full bg-green-500 transition-all" style={{ width: `${passRate}%` }} />
             </div>
-            <span className="text-slate-600 font-medium">{passRate}%</span>
+            <span className="text-slate-600 font-medium text-sm">{passRate}%</span>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white border-b px-6 py-3 flex gap-3 items-center flex-wrap">
+      <div className="bg-white border-b px-8 py-2.5 flex gap-2 items-center flex-wrap shrink-0">
         <Input
           placeholder="제목/영역 검색..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-48 h-8 text-sm"
+          className="w-44 h-8 text-sm"
         />
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="테스트 결과" /></SelectTrigger>
+          <SelectTrigger className="w-32 h-8 text-sm"><SelectValue placeholder="테스트결과" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체</SelectItem>
             <SelectItem value="not_tested">미테스트</SelectItem>
@@ -202,7 +211,7 @@ export default function TestCasesPage() {
           </SelectContent>
         </Select>
         <Select value={filterProcessing} onValueChange={setFilterProcessing}>
-          <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="처리 상태" /></SelectTrigger>
+          <SelectTrigger className="w-32 h-8 text-sm"><SelectValue placeholder="처리상태" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체</SelectItem>
             <SelectItem value="pending">미처리</SelectItem>
@@ -213,174 +222,241 @@ export default function TestCasesPage() {
         </Select>
         {areas.length > 0 && (
           <Select value={filterArea} onValueChange={setFilterArea}>
-            <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="영역" /></SelectTrigger>
+            <SelectTrigger className="w-32 h-8 text-sm"><SelectValue placeholder="영역" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 영역</SelectItem>
               {areas.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
+        <div className="flex items-center gap-1 text-sm text-slate-500">
+          <span className="text-xs">등록일</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-8 px-2 text-xs border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <span className="text-xs">~</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-8 px-2 text-xs border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-slate-400 hover:text-slate-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
         <span className="text-xs text-slate-400 ml-auto">{filtered.length}건</span>
       </div>
 
-      {/* Test Cases */}
-      <main className="max-w-6xl mx-auto px-4 py-4 space-y-2">
+      {/* Table */}
+      <main className="flex-1 overflow-auto px-8 py-5">
         {loading ? (
           <div className="space-y-2">
-            {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-slate-200 rounded-lg animate-pulse" />)}
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-12 bg-slate-200 rounded animate-pulse" />)}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-20 text-slate-400">
-            <p>테스트 케이스가 없습니다</p>
-            {isAdmin && <Button className="mt-4" onClick={openCreate}><Plus /> 테스트 케이스 추가</Button>}
+          <div className="text-center py-24 text-slate-400">
+            <p>항목이 없습니다</p>
+            {isAdmin && <Button className="mt-4" onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> 항목 추가</Button>}
           </div>
         ) : (
-          filtered.map((tc, idx) => (
-            <div key={tc.id} className="bg-white border rounded-lg overflow-hidden shadow-sm">
-              {/* Row Header */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-xs text-slate-400 w-6 shrink-0">{idx + 1}</span>
-
-                {tc.area && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">{tc.area}</span>
-                )}
-
-                <span
-                  className={cn('text-xs px-2 py-0.5 rounded font-medium shrink-0', PRIORITY_COLORS[tc.priority])}
-                >
-                  {PRIORITY_LABELS[tc.priority]}
-                </span>
-
-                <button
-                  className="text-sm font-medium text-slate-800 text-left flex-1 hover:text-primary transition-colors"
-                  onClick={() => toggleExpand(tc.id)}
-                >
-                  {tc.title}
-                </button>
-
-                {tc.images.length > 0 && (
-                  <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
-                    <Image className="w-3.5 h-3.5" /> {tc.images.length}
-                  </span>
-                )}
-
-                {/* Test Status Selector - admin + developer */}
-                {canEditStatus ? (
-                  <Select value={tc.status} onValueChange={(v) => quickUpdateStatus(tc.id, v as TestStatus)}>
-                    <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="not_tested">미테스트</SelectItem>
-                      <SelectItem value="pass">통과</SelectItem>
-                      <SelectItem value="fail">실패</SelectItem>
-                      <SelectItem value="blocked">블로킹</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
-                    {tc.status === 'not_tested' ? '미테스트' : tc.status === 'pass' ? '통과' : tc.status === 'fail' ? '실패' : '블로킹'}
-                  </span>
-                )}
-
-                {/* Processing Status Selector - admin only */}
-                {isAdmin ? (
-                  <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
-                    <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">미처리</SelectItem>
-                      <SelectItem value="in_progress">처리중</SelectItem>
-                      <SelectItem value="resolved">처리완료</SelectItem>
-                      <SelectItem value="wont_fix">보류</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
-                    {tc.processingStatus === 'pending' ? '미처리' : tc.processingStatus === 'in_progress' ? '처리중' : tc.processingStatus === 'resolved' ? '처리완료' : '보류'}
-                  </span>
-                )}
-
-                <div className="flex gap-1 shrink-0">
-                  {tc.ticketLink && (
-                    <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer">
-                      <Button variant="ghost" size="icon" className="h-7 w-7">
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Button>
-                    </a>
-                  )}
-                  {isAdmin && (
-                    <>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(tc)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(tc)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </>
-                  )}
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleExpand(tc.id)}>
-                    {expanded.has(tc.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Expanded Detail */}
-              {expanded.has(tc.id) && (
-                <div className="border-t px-4 py-4 bg-slate-50 grid grid-cols-2 gap-4 text-sm">
-                  {tc.steps && (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 mb-1">테스트 절차</p>
-                      <p className="text-slate-700 whitespace-pre-wrap">{tc.steps}</p>
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    {tc.expectedResult && (
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500 mb-1">기대 결과</p>
-                        <p className="text-slate-700 whitespace-pre-wrap">{tc.expectedResult}</p>
+          <div className="rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
+              <tr className="text-xs text-slate-600 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 text-left w-9">#</th>
+                <th className="px-4 py-3 text-left w-24">영역</th>
+                <th className="px-4 py-3 text-left w-16">우선순위</th>
+                <th className="px-4 py-3 text-left">제목</th>
+                <th className="px-4 py-3 text-left w-28">테스트결과</th>
+                <th className="px-4 py-3 text-left w-28">처리상태</th>
+                <th className="px-4 py-3 text-left w-24">등록일</th>
+                <th className="px-4 py-3 text-center w-10"></th>
+                <th className="px-4 py-3 text-center w-24"></th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-200">
+              {filtered.map((tc, idx) => (
+                <Fragment key={tc.id}>
+                  {/* Main Row */}
+                  <tr
+                    className={cn('hover:bg-slate-50 cursor-pointer transition-colors whitespace-nowrap', expanded.has(tc.id) ? 'bg-sky-50 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent')}
+                    onClick={() => toggleExpand(tc.id)}
+                  >
+                    <td className="px-4 py-2.5 text-xs text-slate-400">{idx + 1}</td>
+                    <td className="px-4 py-2.5">
+                      {tc.area
+                        ? <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{tc.area}</span>
+                        : <span className="text-slate-300">-</span>
+                      }
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={cn('text-xs px-2 py-0.5 rounded font-medium', PRIORITY_COLORS[tc.priority])}>
+                        {PRIORITY_LABELS[tc.priority]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 max-w-xs">
+                      <div className="font-medium text-slate-800 truncate">{tc.title}</div>
+                      {(tc.tester || tc.assignedDeveloper) && (
+                        <div className="text-xs text-slate-400 mt-0.5 flex gap-2">
+                          {tc.tester && <span>테스터: {tc.tester}</span>}
+                          {tc.assignedDeveloper && <span>개발자: {tc.assignedDeveloper}</span>}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <Select value={tc.status} onValueChange={(v) => quickUpdateStatus(tc.id, v as TestStatus)}>
+                          <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium px-2', TEST_STATUS_COLORS[tc.status])}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="not_tested">미테스트</SelectItem>
+                            <SelectItem value="pass">통과</SelectItem>
+                            <SelectItem value="fail">실패</SelectItem>
+                            <SelectItem value="blocked">블로킹</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
+                          {TEST_STATUS_LABELS[tc.status]}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      {isAdmin ? (
+                        <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
+                          <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium px-2', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">미처리</SelectItem>
+                            <SelectItem value="in_progress">처리중</SelectItem>
+                            <SelectItem value="resolved">처리완료</SelectItem>
+                            <SelectItem value="wont_fix">보류</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
+                          {PROCESSING_STATUS_LABELS[tc.processingStatus]}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500">{formatDate(tc.createdAt)}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {tc.images.length > 0 && (
+                        <span className="text-xs text-slate-400 flex items-center justify-center gap-0.5">
+                          <Image className="w-3.5 h-3.5" />{tc.images.length}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-0.5">
+                        {tc.ticketLink && (
+                          <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="w-3.5 h-3.5" /></Button>
+                          </a>
+                        )}
+                        {isAdmin && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(tc)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(tc)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400" onClick={() => toggleExpand(tc.id)}>
+                          {expanded.has(tc.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </Button>
                       </div>
-                    )}
-                    {tc.actualResult && (
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500 mb-1">실제 결과</p>
-                        <p className="text-slate-700 whitespace-pre-wrap">{tc.actualResult}</p>
-                      </div>
-                    )}
-                  </div>
-                  {(tc.tester || tc.assignedDeveloper) && (
-                    <div className="flex gap-4 col-span-2">
-                      {tc.tester && <span className="text-xs text-slate-500">테스터: <strong className="text-slate-700">{tc.tester}</strong></span>}
-                      {tc.assignedDeveloper && <span className="text-xs text-slate-500">담당 개발자: <strong className="text-slate-700">{tc.assignedDeveloper}</strong></span>}
-                    </div>
+                    </td>
+                  </tr>
+
+                  {/* Detail Row */}
+                  {expanded.has(tc.id) && (
+                    <tr className="bg-slate-50/80">
+                      <td colSpan={9} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
+                        <div className="space-y-4 max-w-5xl">
+
+                          {/* Meta info */}
+                          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pb-3 border-b border-slate-200">
+                            <span className="text-slate-400">영역 <strong className="text-slate-700">{tc.area || '-'}</strong></span>
+                            <span className="text-slate-400">우선순위 <strong className={cn('px-1.5 py-0.5 rounded text-xs', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</strong></span>
+                            {tc.tester && <span className="text-slate-400">테스터 <strong className="text-slate-700">{tc.tester}</strong></span>}
+                            {tc.assignedDeveloper && <span className="text-slate-400">담당 개발자 <strong className="text-slate-700">{tc.assignedDeveloper}</strong></span>}
+                            {tc.ticketLink && (
+                              <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-xs hover:underline">
+                                <ExternalLink className="w-3 h-3" /> 티켓 링크
+                              </a>
+                            )}
+                            <span className="text-slate-400">등록일 <strong className="text-slate-700">{formatDate(tc.createdAt)}</strong></span>
+                          </div>
+
+                          {/* Steps + Results */}
+                          <div className="grid grid-cols-2 gap-4">
+                            {tc.steps && (
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">테스트 절차</p>
+                                <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-white border rounded-md p-3">{tc.steps}</p>
+                              </div>
+                            )}
+                            <div className="space-y-3">
+                              {tc.expectedResult && (
+                                <div className="space-y-1.5">
+                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">기대 결과</p>
+                                  <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-white border rounded-md p-3">{tc.expectedResult}</p>
+                                </div>
+                              )}
+                              {tc.actualResult && (
+                                <div className="space-y-1.5">
+                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">실제 결과</p>
+                                  <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-white border rounded-md p-3">{tc.actualResult}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Developer Note */}
+                          {tc.developerNote && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">개발자 메모</p>
+                              <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-blue-50 border border-blue-100 rounded-md p-3">{tc.developerNote}</p>
+                            </div>
+                          )}
+
+                          {/* Images */}
+                          {tc.images.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">첨부 이미지 ({tc.images.length})</p>
+                              <div className="flex flex-wrap gap-2">
+                                {tc.images.map((url) => (
+                                  <img
+                                    key={url}
+                                    src={url}
+                                    className="w-28 h-28 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+                                    onClick={() => setLightbox(url)}
+                                    alt=""
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                  {tc.developerNote && (
-                    <div className="col-span-2 bg-blue-50 rounded p-3">
-                      <p className="text-xs font-semibold text-blue-600 mb-1">개발자 메모</p>
-                      <p className="text-slate-700 whitespace-pre-wrap text-sm">{tc.developerNote}</p>
-                    </div>
-                  )}
-                  {tc.images.length > 0 && (
-                    <div className="col-span-2">
-                      <p className="text-xs font-semibold text-slate-500 mb-2">첨부 이미지</p>
-                      <div className="flex flex-wrap gap-2">
-                        {tc.images.map((url) => (
-                          <img
-                            key={url}
-                            src={url}
-                            className="w-24 h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => setLightbox(url)}
-                            alt=""
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+          </div>
         )}
       </main>
 
@@ -388,7 +464,7 @@ export default function TestCasesPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>테스트 케이스 삭제</AlertDialogTitle>
+            <AlertDialogTitle>항목 삭제</AlertDialogTitle>
             <AlertDialogDescription>"{deleteTarget?.title}"을 삭제하시겠습니까?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -404,6 +480,9 @@ export default function TestCasesPage() {
       {lightbox && (
         <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center" onClick={() => setLightbox(null)}>
           <img src={lightbox} className="max-w-[90vw] max-h-[90vh] object-contain rounded" alt="" />
+          <button className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2" onClick={() => setLightbox(null)}>
+            <X className="w-5 h-5" />
+          </button>
         </div>
       )}
     </div>

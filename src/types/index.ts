@@ -8,6 +8,8 @@ export interface UserProfile {
   createdAt: string
 }
 
+export type SuiteType = 'qa' | 'dev'
+
 export type Priority = 'critical' | 'high' | 'medium' | 'low'
 export type TestStatus = 'pass' | 'fail' | 'blocked' | 'not_tested'
 export type ProcessingStatus = 'pending' | 'in_progress' | 'resolved' | 'wont_fix'
@@ -16,6 +18,7 @@ export interface Product {
   id: string
   name: string
   description: string
+  order: number
   createdAt: string
 }
 
@@ -24,6 +27,8 @@ export interface TestSuite {
   productId: string
   name: string
   version: string
+  type: SuiteType
+  order: number
   createdAt: string
 }
 

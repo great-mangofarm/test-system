@@ -8,10 +8,10 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 }
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
-  critical: 'bg-red-100 text-red-800',
-  high: 'bg-orange-100 text-orange-800',
-  medium: 'bg-yellow-100 text-yellow-800',
-  low: 'bg-slate-100 text-slate-600',
+  critical: 'bg-red-600 text-white',
+  high: 'bg-orange-500 text-white',
+  medium: 'bg-yellow-400 text-yellow-900',
+  low: 'bg-slate-200 text-slate-600',
 }
 
 export const TEST_STATUS_LABELS: Record<TestStatus, string> = {
@@ -22,10 +22,10 @@ export const TEST_STATUS_LABELS: Record<TestStatus, string> = {
 }
 
 export const TEST_STATUS_COLORS: Record<TestStatus, string> = {
-  pass: 'bg-green-100 text-green-800',
-  fail: 'bg-red-100 text-red-800',
-  blocked: 'bg-orange-100 text-orange-800',
-  not_tested: 'bg-slate-100 text-slate-500',
+  pass: 'bg-green-600 text-white',
+  fail: 'bg-red-600 text-white',
+  blocked: 'bg-orange-500 text-white',
+  not_tested: 'bg-slate-200 text-slate-600',
 }
 
 export const PROCESSING_STATUS_LABELS: Record<ProcessingStatus, string> = {
@@ -36,8 +36,8 @@ export const PROCESSING_STATUS_LABELS: Record<ProcessingStatus, string> = {
 }
 
 export const PROCESSING_STATUS_COLORS: Record<ProcessingStatus, string> = {
-  pending: 'bg-slate-100 text-slate-600',
-  in_progress: 'bg-blue-100 text-blue-800',
-  resolved: 'bg-green-100 text-green-800',
-  wont_fix: 'bg-gray-100 text-gray-500',
+  pending: 'bg-slate-200 text-slate-600',
+  in_progress: 'bg-blue-600 text-white',
+  resolved: 'bg-emerald-600 text-white',
+  wont_fix: 'bg-slate-400 text-white',
 }

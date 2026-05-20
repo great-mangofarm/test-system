@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth, logout } from '@/store/auth'
+import { useAuth, logout, sendPasswordReset } from '@/store/auth'
 import type { UserProfile, UserRole } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { toast } from '@/hooks/use-toast'
-import { ChevronLeft, LogOut, Users } from 'lucide-react'
+import { ChevronLeft, LogOut, Users, RotateCcw } from 'lucide-react'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
@@ -16,10 +15,10 @@ const ROLE_LABELS: Record<UserRole, string> = {
   viewer: '뷰어',
 }
 
-const ROLE_COLORS: Record<UserRole, string> = {
-  admin: 'bg-red-100 text-red-700',
-  developer: 'bg-blue-100 text-blue-700',
-  viewer: 'bg-slate-100 text-slate-600',
+const ROLE_BADGE: Record<UserRole, string> = {
+  admin: 'bg-red-100 text-red-700 border border-red-200',
+  developer: 'bg-blue-100 text-blue-700 border border-blue-200',
+  viewer: 'bg-slate-100 text-slate-600 border border-slate-200',
 }
 
 export default function AdminPage() {
@@ -28,6 +27,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [resetting, setResetting] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -53,6 +53,18 @@ export default function AdminPage() {
       toast({ title: '권한 변경 실패', variant: 'destructive' })
     } finally {
       setUpdating(null)
+    }
+  }
+
+  async function handlePasswordReset(email: string) {
+    setResetting(email)
+    try {
+      await sendPasswordReset(email)
+      toast({ title: '비밀번호 초기화 메일을 발송했습니다' })
+    } catch {
+      toast({ title: '메일 발송 실패', variant: 'destructive' })
+    } finally {
+      setResetting(null)
     }
   }
 
@@ -100,18 +112,30 @@ export default function AdminPage() {
                   <p className="font-medium text-slate-800">{u.displayName}</p>
                   <p className="text-sm text-slate-500">{u.email}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  {u.uid !== user?.uid && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-slate-500"
+                      disabled={resetting === u.email}
+                      onClick={() => handlePasswordReset(u.email)}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      {resetting === u.email ? '발송 중...' : '비밀번호 초기화'}
+                    </Button>
+                  )}
                   {u.uid === user?.uid ? (
-                    <Badge className={ROLE_COLORS[u.role]}>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_BADGE[u.role]}`}>
                       {ROLE_LABELS[u.role]} (나)
-                    </Badge>
+                    </span>
                   ) : (
                     <Select
                       value={u.role}
                       onValueChange={(v) => handleRoleChange(u.uid, v as UserRole)}
                       disabled={updating === u.uid}
                     >
-                      <SelectTrigger className="w-32 h-8 text-sm">
+                      <SelectTrigger className="w-28 h-8 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
