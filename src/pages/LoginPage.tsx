@@ -71,7 +71,7 @@ export default function LoginPage() {
           <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
             <Lock className="w-6 h-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">QA 테스트 시스템</CardTitle>
+          <CardTitle className="text-2xl">에버온 이슈트래커</CardTitle>
           <CardDescription>
             {view === 'login' ? '계정 정보를 입력하세요' : '비밀번호 찾기'}
           </CardDescription>
