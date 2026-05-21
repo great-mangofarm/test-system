@@ -43,6 +43,7 @@ export default function TestCasesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<TestCase | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TestCase | null>(null)
+  const [deleteJiraToo, setDeleteJiraToo] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
@@ -241,11 +242,37 @@ export default function TestCasesPage() {
     await load()
   }
 
+  function extractJiraKey(ticketLink: string): string | null {
+    // https://xxx.atlassian.net/browse/EPC-42 → EPC-42
+    const match = ticketLink.match(/\/browse\/([A-Z]+-\d+)/)
+    return match ? match[1] : null
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return
+    // Jira 티켓도 삭제
+    if (deleteJiraToo && deleteTarget.ticketLink) {
+      const issueKey = extractJiraKey(deleteTarget.ticketLink)
+      if (issueKey) {
+        try {
+          const r = await fetch('/api/jira-delete', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ issueKey }),
+          })
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}))
+            toast({ variant: 'destructive', title: 'Jira 티켓 삭제 실패', description: JSON.stringify(d.error ?? d) })
+          }
+        } catch (e) {
+          toast({ variant: 'destructive', title: 'Jira 티켓 삭제 실패', description: String(e) })
+        }
+      }
+    }
     await deleteTestCase(deleteTarget.id)
     toast({ title: '삭제됨', variant: 'destructive' })
     setDeleteTarget(null)
+    setDeleteJiraToo(false)
     await load()
   }
 
@@ -779,12 +806,25 @@ export default function TestCasesPage() {
       </main>
 
       {/* Delete Confirm */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) { setDeleteTarget(null); setDeleteJiraToo(false) } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>항목 삭제</AlertDialogTitle>
             <AlertDialogDescription>"{deleteTarget?.title}"을 삭제하시겠습니까?</AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteTarget?.ticketLink && extractJiraKey(deleteTarget.ticketLink) && (
+            <label className="flex items-center gap-2 px-1 py-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={deleteJiraToo}
+                onChange={(e) => setDeleteJiraToo(e.target.checked)}
+                className="w-4 h-4 accent-destructive"
+              />
+              <span className="text-sm text-slate-700">
+                Jira 티켓 <span className="font-mono text-xs text-slate-500">{extractJiraKey(deleteTarget.ticketLink!)}</span>도 함께 삭제
+              </span>
+            </label>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
