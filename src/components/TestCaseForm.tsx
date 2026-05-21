@@ -12,11 +12,18 @@ import { useToast } from '@/hooks/use-toast'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
 
+export type JiraFields = {
+  issueType: string
+  assigneeAccountId: string
+}
+
 interface Props {
   suiteId: string
   initial?: Partial<FormData>
   users?: UserProfile[]
-  onSave: (data: FormData) => Promise<void>
+  jiraProjectKey?: string
+  currentUserEmail?: string
+  onSave: (data: FormData, jiraFields: JiraFields) => Promise<void>
   onCancel: () => void
 }
 
@@ -34,6 +41,8 @@ const defaultForm: FormData = {
   tester: '',
   assignedDeveloper: '',
   priority: 'medium',
+  dueDate: '',
+  planningLink: '',
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
@@ -45,13 +54,27 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function TestCaseForm({ suiteId, initial, users = [], onSave, onCancel }: Props) {
+export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, onSave, onCancel }: Props) {
   const [form, setForm] = useState<FormData>({ ...defaultForm, ...initial })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+
+  // Jira-only state (not persisted to FormData)
+  const [jiraIssueType, setJiraIssueType] = useState('버그')
+  const [jiraAssigneeAccountId, setJiraAssigneeAccountId] = useState('')
+  const [jiraUsers, setJiraUsers] = useState<{ accountId: string; displayName: string }[]>([])
+
+  useEffect(() => {
+    if (jiraProjectKey) {
+      fetch(`/api/jira-users?projectKey=${encodeURIComponent(jiraProjectKey)}`)
+        .then((r) => r.ok ? r.json() : [])
+        .then((data) => setJiraUsers(Array.isArray(data) ? data : []))
+        .catch(() => setJiraUsers([]))
+    }
+  }, [jiraProjectKey])
 
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -99,8 +122,14 @@ export function TestCaseForm({ suiteId, initial, users = [], onSave, onCancel }:
   async function handleSave() {
     if (!form.title.trim()) return
     setSaving(true)
-    try { await onSave(form) }
-    finally { setSaving(false) }
+    try {
+      await onSave(form, {
+        issueType: jiraIssueType,
+        assigneeAccountId: jiraAssigneeAccountId,
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -186,6 +215,29 @@ export function TestCaseForm({ suiteId, initial, users = [], onSave, onCancel }:
             </div>
           </div>
 
+          {/* ── 기한 / 기획서링크 ── */}
+          <SectionHeader>기한 / 기획서링크</SectionHeader>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>기한</Label>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => set('dueDate', e.target.value)}
+                className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>기획서링크</Label>
+              <Input
+                placeholder="https://..."
+                value={form.planningLink}
+                onChange={(e) => set('planningLink', e.target.value)}
+              />
+            </div>
+          </div>
+
           {/* ── 테스트 내용 ── */}
           <SectionHeader>테스트 내용</SectionHeader>
 
@@ -263,6 +315,40 @@ export function TestCaseForm({ suiteId, initial, users = [], onSave, onCancel }:
               className="resize-y"
             />
           </div>
+
+          {/* ── Jira 연동 ── */}
+          {jiraProjectKey && (
+            <>
+              <SectionHeader>Jira 연동</SectionHeader>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>업무유형</Label>
+                  <Select value={jiraIssueType} onValueChange={setJiraIssueType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="버그">버그</SelectItem>
+                      <SelectItem value="에픽">에픽</SelectItem>
+                      <SelectItem value="스토리">스토리</SelectItem>
+                      <SelectItem value="작업">작업</SelectItem>
+                      <SelectItem value="하위 작업">하위 작업</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>담당자</Label>
+                  <Select value={jiraAssigneeAccountId || '__none__'} onValueChange={(v) => setJiraAssigneeAccountId(v === '__none__' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="선택 안함" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">선택 안함</SelectItem>
+                      {jiraUsers.map((u) => (
+                        <SelectItem key={u.accountId} value={u.accountId}>{u.displayName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* ── 이미지 ── */}
           <SectionHeader>이미지 첨부</SectionHeader>

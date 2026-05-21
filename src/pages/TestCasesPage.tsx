@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { TestCaseForm } from '@/components/TestCaseForm'
+import type { JiraFields } from '@/components/TestCaseForm'
 import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
@@ -149,10 +150,24 @@ export default function TestCasesPage() {
     setDialogOpen(true)
   }
 
-  async function createJiraTicket(data: FormData): Promise<string | null> {
+  async function createJiraTicket(data: FormData, jiraFields: JiraFields): Promise<string | null> {
     const jiraProjectKey = product?.jiraProjectKey
     if (!jiraProjectKey) return null
     try {
+      // Look up reporter accountId from current user's email
+      let reporterAccountId: string | null = null
+      if (user?.email) {
+        try {
+          const userRes = await fetch(`/api/jira-users?email=${encodeURIComponent(user.email)}`)
+          if (userRes.ok) {
+            const userData = await userRes.json()
+            if (userData?.accountId) reporterAccountId = userData.accountId
+          }
+        } catch {
+          // ignore reporter lookup failure
+        }
+      }
+
       const res = await fetch('/api/jira', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,6 +179,11 @@ export default function TestCasesPage() {
           steps: data.steps,
           expectedResult: data.expectedResult,
           actualResult: data.actualResult,
+          issueType: jiraFields.issueType,
+          assigneeAccountId: jiraFields.assigneeAccountId || null,
+          reporterAccountId,
+          dueDate: data.dueDate || undefined,
+          planningLink: data.planningLink || undefined,
         }),
       })
       if (!res.ok) return null
@@ -174,7 +194,7 @@ export default function TestCasesPage() {
     }
   }
 
-  async function handleSave(data: FormData) {
+  async function handleSave(data: FormData, jiraFields: JiraFields) {
     if (!productId || !suiteId) return
     if (editTarget) {
       await updateTestCase(editTarget.id, data)
@@ -182,7 +202,7 @@ export default function TestCasesPage() {
     } else {
       const order = cases.length > 0 ? Math.max(...cases.map((c) => c.order)) + 1 : 0
       // Jira 티켓 생성 후 링크 자동 입력
-      const jiraUrl = await createJiraTicket(data)
+      const jiraUrl = await createJiraTicket(data, jiraFields)
       await createTestCase({
         ...data,
         ticketLink: jiraUrl ?? data.ticketLink,
@@ -265,6 +285,8 @@ export default function TestCasesPage() {
                 suiteId={suiteId!}
                 initial={editTarget ?? undefined}
                 users={users}
+                jiraProjectKey={product?.jiraProjectKey}
+                currentUserEmail={user?.email}
                 onSave={handleSave}
                 onCancel={() => setDialogOpen(false)}
               />
@@ -645,6 +667,30 @@ export default function TestCasesPage() {
                                       </div>
                                     : tc.ticketLink
                                       ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
+                                      : <span className="text-slate-300 text-sm">—</span>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">기한</p>
+                                  {isEditing
+                                    ? <input
+                                        type="date"
+                                        value={f.dueDate ?? ''}
+                                        onChange={(e) => setF('dueDate', e.target.value)}
+                                        className="h-8 w-full px-2 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                      />
+                                    : tc.dueDate
+                                      ? <p className="text-sm font-medium text-slate-700">{tc.dueDate}</p>
+                                      : <span className="text-slate-300 text-sm">—</span>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">기획서링크</p>
+                                  {isEditing
+                                    ? <div className="flex items-center gap-1">
+                                        <Input className="h-8 text-sm min-w-0" placeholder="https://..." value={f.planningLink ?? ''} onChange={(e) => setF('planningLink', e.target.value)} />
+                                        {f.planningLink && <a href={f.planningLink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>}
+                                      </div>
+                                    : tc.planningLink
+                                      ? <a href={tc.planningLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.planningLink}</a>
                                       : <span className="text-slate-300 text-sm">—</span>}
                                 </div>
                               </div>

@@ -5,46 +5,82 @@ const JIRA_EMAIL = process.env.JIRA_EMAIL!              // jyp@everon.co.kr
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN!      // API 토큰
 
 const PRIORITY_MAP: Record<string, string> = {
-  critical: 'Highest',
-  high: 'High',
+  critical: 'Hotfix',
+  high: 'Hotfix',
   medium: 'Medium',
   low: 'Low',
+}
+
+function buildADF(area: string, steps: string, expectedResult: string, actualResult: string) {
+  const content: unknown[] = []
+
+  function addSection(label: string, text: string) {
+    if (!text) return
+    content.push({
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: `${label}: `, marks: [{ type: 'strong' }] },
+        { type: 'text', text },
+      ],
+    })
+  }
+
+  if (area) addSection('영역', area)
+  if (steps) addSection('테스트 절차', steps)
+  if (expectedResult) addSection('기대 결과', expectedResult)
+  if (actualResult) addSection('실제 결과', actualResult)
+
+  return {
+    type: 'doc',
+    version: 1,
+    content: content.length > 0 ? content : [{ type: 'paragraph', content: [] }],
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { projectKey, title, area, priority, steps, expectedResult, actualResult } = req.body
+  const {
+    projectKey,
+    title,
+    area,
+    priority,
+    steps,
+    expectedResult,
+    actualResult,
+    issueType,
+    assigneeAccountId,
+    reporterAccountId,
+    dueDate,
+    planningLink,
+  } = req.body
 
   if (!projectKey || !title) {
     return res.status(400).json({ error: 'projectKey and title are required' })
   }
 
-  const description = [
-    area && `*영역:* ${area}`,
-    steps && `\n*테스트 절차:*\n${steps}`,
-    expectedResult && `\n*기대 결과:*\n${expectedResult}`,
-    actualResult && `\n*실제 결과:*\n${actualResult}`,
-  ].filter(Boolean).join('\n')
-
-  const body = {
-    fields: {
-      project: { key: projectKey },
-      summary: title,
-      description: {
-        type: 'doc',
-        version: 1,
-        content: description ? [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: description }],
-          },
-        ] : [],
-      },
-      issuetype: { name: 'Bug' },
-      priority: { name: PRIORITY_MAP[priority] ?? 'Medium' },
-    },
+  const fields: Record<string, unknown> = {
+    project: { key: projectKey },
+    summary: title,
+    issuetype: { name: issueType || '버그' },
+    priority: { name: PRIORITY_MAP[priority] ?? 'Medium' },
+    description: buildADF(area, steps, expectedResult, actualResult),
   }
+
+  if (assigneeAccountId) {
+    fields.assignee = { id: assigneeAccountId }
+  }
+  if (reporterAccountId) {
+    fields.customfield_10037 = { id: reporterAccountId }
+  }
+  if (dueDate) {
+    fields.duedate = dueDate
+  }
+  if (planningLink) {
+    fields.customfield_10122 = planningLink
+  }
+
+  const body = { fields }
 
   try {
     const response = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue`, {

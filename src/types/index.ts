@@ -50,6 +50,8 @@ export interface TestCase {
   tester: string
   assignedDeveloper: string
   priority: Priority
+  dueDate: string
+  planningLink: string
   order: number
   createdAt: string
   updatedAt: string
