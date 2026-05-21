@@ -7,9 +7,6 @@ import {
   updateProfile,
   updatePassword,
   sendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
   deleteUser,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
@@ -61,8 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export async function login(email: string, password: string, remember: boolean): Promise<void> {
-  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence)
+export async function login(email: string, password: string, _remember: boolean): Promise<void> {
   await signInWithEmailAndPassword(auth, email, password)
 }
 
