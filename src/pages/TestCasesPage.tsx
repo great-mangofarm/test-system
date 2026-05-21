@@ -178,10 +178,17 @@ export default function TestCasesPage() {
           planningLink: issueTrackerUrl || undefined,
         }),
       })
-      if (!res.ok) return null
-      const { issueUrl } = await res.json()
-      return issueUrl
-    } catch {
+      const resJson = await res.json()
+      if (!res.ok) {
+        const errMsg = typeof resJson.error === 'string'
+          ? resJson.error
+          : JSON.stringify(resJson.error ?? resJson)
+        toast({ variant: 'destructive', title: 'Jira 티켓 생성 실패', description: errMsg })
+        return null
+      }
+      return resJson.issueUrl
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Jira 티켓 생성 실패', description: String(e) })
       return null
     }
   }
