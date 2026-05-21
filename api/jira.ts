@@ -53,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     reporterName,
     dueDate,
     planningLink,
+    images,
   } = req.body
 
   if (!projectKey || !title) {
@@ -101,6 +102,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const issueKey = data.key  // 예: EPC-42
     const issueUrl = `${JIRA_BASE_URL}/browse/${issueKey}`
+
+    // 첨부 이미지 업로드
+    const imageUrls: string[] = Array.isArray(images) ? images : []
+    const authHeader = `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`
+    for (const imageUrl of imageUrls) {
+      try {
+        const imgRes = await fetch(imageUrl)
+        if (!imgRes.ok) continue
+        const imgBuffer = await imgRes.arrayBuffer()
+        const contentType = imgRes.headers.get('content-type') || 'image/png'
+        const ext = contentType.split('/')[1]?.split('+')[0] || 'png'
+        const filename = `image-${Date.now()}.${ext}`
+
+        const formData = new FormData()
+        formData.append('file', new Blob([imgBuffer], { type: contentType }), filename)
+
+        await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'X-Atlassian-Token': 'no-check',
+          },
+          body: formData,
+        })
+      } catch {
+        // 개별 이미지 업로드 실패는 무시하고 계속 진행
+      }
+    }
 
     return res.status(200).json({ issueKey, issueUrl })
   } catch (e) {

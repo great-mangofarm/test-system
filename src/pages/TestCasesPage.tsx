@@ -192,6 +192,7 @@ export default function TestCasesPage() {
           dueDate: data.dueDate || undefined,
           // 이슈트래커 URL을 기획서링크로 전송
           planningLink: issueTrackerUrl || undefined,
+          images: data.images.length > 0 ? data.images : undefined,
         }),
       })
       const resJson = await res.json()
