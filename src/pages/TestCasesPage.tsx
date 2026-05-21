@@ -150,7 +150,7 @@ export default function TestCasesPage() {
     setDialogOpen(true)
   }
 
-  async function createJiraTicket(data: FormData, jiraFields: JiraFields): Promise<string | null> {
+  async function createJiraTicket(data: FormData, jiraFields: JiraFields, issueTrackerUrl?: string): Promise<string | null> {
     const jiraProjectKey = product?.jiraProjectKey
     if (!jiraProjectKey) return null
     try {
@@ -183,7 +183,8 @@ export default function TestCasesPage() {
           assigneeAccountId: jiraFields.assigneeAccountId || null,
           reporterAccountId,
           dueDate: data.dueDate || undefined,
-          planningLink: data.planningLink || undefined,
+          // 이슈트래커 URL을 기획서링크로 전송 (없으면 폼 입력값 fallback)
+          planningLink: issueTrackerUrl || data.planningLink || undefined,
         }),
       })
       if (!res.ok) return null
@@ -201,14 +202,25 @@ export default function TestCasesPage() {
       toast({ title: '수정 완료' })
     } else {
       const order = cases.length > 0 ? Math.max(...cases.map((c) => c.order)) + 1 : 0
-      // Jira 티켓 생성 후 링크 자동 입력
-      const jiraUrl = await createJiraTicket(data, jiraFields)
-      await createTestCase({
+
+      // 1. Firestore 이슈 먼저 생성 → ID 확보
+      const newId = await createTestCase({
         ...data,
-        ticketLink: jiraUrl ?? data.ticketLink,
         suiteId, productId, order,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       })
+
+      // 2. 이슈트래커 URL 생성 (이 URL을 Jira 기획서링크로 전송)
+      const issueTrackerUrl = `${window.location.origin}/products/${productId}/suites/${suiteId}#${newId}`
+
+      // 3. Jira 티켓 생성
+      const jiraUrl = await createJiraTicket(data, jiraFields, issueTrackerUrl)
+
+      // 4. Jira 티켓 URL을 ticketLink로 업데이트
+      if (jiraUrl) {
+        await updateTestCase(newId, { ticketLink: jiraUrl })
+      }
+
       toast({ title: jiraUrl ? `추가 완료 · Jira 티켓 생성됨` : '추가 완료' })
     }
     setDialogOpen(false)
