@@ -54,4 +54,8 @@
     background-color: var(--background);
     color: var(--foreground);
   }
+  ::placeholder {
+    color: hsl(214 20% 70%);
+    opacity: 1;
+  }
 }
