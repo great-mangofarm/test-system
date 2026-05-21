@@ -5,13 +5,14 @@ import { db } from '@/lib/firebase'
 import { useAuth, logout, sendPasswordReset, deleteUserDoc } from '@/store/auth'
 import type { UserProfile, UserRole } from '@/types'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from '@/hooks/use-toast'
-import { ChevronLeft, LogOut, Users, RotateCcw, Trash2 } from 'lucide-react'
+import { ChevronLeft, LogOut, Users, RotateCcw, Trash2, Check } from 'lucide-react'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
@@ -33,6 +34,8 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState<string | null>(null)
   const [resetting, setResetting] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null)
+  const [teamEditing, setTeamEditing] = useState<string | null>(null)  // uid
+  const [teamValue, setTeamValue] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -45,6 +48,18 @@ export default function AdminPage() {
       setUsers(list)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleTeamSave(uid: string) {
+    try {
+      await updateDoc(doc(db, 'users', uid), { team: teamValue.trim() })
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, team: teamValue.trim() } : u)))
+      toast({ title: '팀이 저장되었습니다' })
+    } catch {
+      toast({ title: '팀 저장 실패', variant: 'destructive' })
+    } finally {
+      setTeamEditing(null)
     }
   }
 
@@ -126,9 +141,32 @@ export default function AdminPage() {
                 key={u.uid}
                 className="bg-white rounded-lg border px-5 py-4 flex items-center justify-between"
               >
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-800">{u.displayName}</p>
                   <p className="text-sm text-slate-500">{u.email}</p>
+                  {/* 팀 편집 */}
+                  {teamEditing === u.uid ? (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Input
+                        autoFocus
+                        className="h-7 text-xs w-36"
+                        placeholder="팀 이름 (예: 개발팀)"
+                        value={teamValue}
+                        onChange={(e) => setTeamValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleTeamSave(u.uid); if (e.key === 'Escape') setTeamEditing(null) }}
+                      />
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleTeamSave(u.uid)}>
+                        <Check className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      className="text-xs text-slate-400 hover:text-primary mt-0.5 text-left"
+                      onClick={() => { setTeamEditing(u.uid); setTeamValue(u.team ?? '') }}
+                    >
+                      {u.team ? `${u.team}` : '+ 팀 추가'}
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {u.uid !== user?.uid && (

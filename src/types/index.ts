@@ -5,6 +5,7 @@ export interface UserProfile {
   email: string
   displayName: string
   role: UserRole
+  team: string
   createdAt: string
 }
 

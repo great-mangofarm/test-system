@@ -154,19 +154,10 @@ export default function TestCasesPage() {
     const jiraProjectKey = product?.jiraProjectKey
     if (!jiraProjectKey) return null
     try {
-      // Look up reporter accountId from current user's email
-      let reporterAccountId: string | null = null
-      if (user?.email) {
-        try {
-          const userRes = await fetch(`/api/jira-users?email=${encodeURIComponent(user.email)}`)
-          if (userRes.ok) {
-            const userData = await userRes.json()
-            if (userData?.accountId) reporterAccountId = userData.accountId
-          }
-        } catch {
-          // ignore reporter lookup failure
-        }
-      }
+      // 요청자: "{팀} {이름}" 문자열로 전송
+      const reporterName = user
+        ? [user.team, user.displayName].filter(Boolean).join(' ')
+        : undefined
 
       const res = await fetch('/api/jira', {
         method: 'POST',
@@ -181,10 +172,10 @@ export default function TestCasesPage() {
           actualResult: data.actualResult,
           issueType: jiraFields.issueType,
           assigneeAccountId: jiraFields.assigneeAccountId || null,
-          reporterAccountId,
+          reporterName: reporterName || undefined,
           dueDate: data.dueDate || undefined,
-          // 이슈트래커 URL을 기획서링크로 전송 (없으면 폼 입력값 fallback)
-          planningLink: issueTrackerUrl || data.planningLink || undefined,
+          // 이슈트래커 URL을 기획서링크로 전송
+          planningLink: issueTrackerUrl || undefined,
         }),
       })
       if (!res.ok) return null
@@ -298,7 +289,7 @@ export default function TestCasesPage() {
                 initial={editTarget ?? undefined}
                 users={users}
                 jiraProjectKey={product?.jiraProjectKey}
-                currentUserEmail={user?.email}
+                currentUserDisplayName={user?.displayName}
                 onSave={handleSave}
                 onCancel={() => setDialogOpen(false)}
               />
@@ -446,7 +437,7 @@ export default function TestCasesPage() {
                     <td className="px-4 py-2.5 max-w-xs">
                       <div className="font-medium text-slate-800 truncate">{tc.title}</div>
                       {tc.tester && (
-                        <div className="text-xs text-slate-400 mt-0.5">테스터: {tc.tester}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">등록자: {tc.tester}</div>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-slate-600 whitespace-nowrap">
@@ -611,7 +602,7 @@ export default function TestCasesPage() {
                                   ) : <span className={cn('text-xs px-2 py-0.5 rounded font-medium', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</span>}
                                 </div>
                                 <div>
-                                  <p className="text-xs text-slate-400 mb-1">테스터</p>
+                                  <p className="text-xs text-slate-400 mb-1">등록자</p>
                                   {isEditing ? (
                                     <Select value={f.tester || '__none__'} onValueChange={(v) => setF('tester', v === '__none__' ? '' : v)}>
                                       <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>

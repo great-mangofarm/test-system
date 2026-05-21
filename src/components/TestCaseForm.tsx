@@ -22,7 +22,7 @@ interface Props {
   initial?: Partial<FormData>
   users?: UserProfile[]
   jiraProjectKey?: string
-  currentUserEmail?: string
+  currentUserDisplayName?: string
   onSave: (data: FormData, jiraFields: JiraFields) => Promise<void>
   onCancel: () => void
 }
@@ -54,8 +54,13 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, onSave, onCancel }: Props) {
-  const [form, setForm] = useState<FormData>({ ...defaultForm, ...initial })
+export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, currentUserDisplayName, onSave, onCancel }: Props) {
+  const [form, setForm] = useState<FormData>({
+    ...defaultForm,
+    ...initial,
+    // 신규 등록 시 등록자를 현재 로그인 사용자로 자동 세팅
+    tester: initial !== undefined ? (initial.tester ?? '') : (currentUserDisplayName ?? ''),
+  })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
@@ -186,7 +191,7 @@ export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, onS
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>테스터</Label>
+              <Label>등록자</Label>
               {users.length > 0 ? (
                 <Select value={form.tester || '__none__'} onValueChange={(v) => set('tester', v === '__none__' ? '' : v)}>
                   <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>

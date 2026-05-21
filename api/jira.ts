@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     actualResult,
     issueType,
     assigneeAccountId,
-    reporterAccountId,
+    reporterName,
     dueDate,
     planningLink,
   } = req.body
@@ -70,8 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (assigneeAccountId) {
     fields.assignee = { id: assigneeAccountId }
   }
-  if (reporterAccountId) {
-    fields.customfield_10037 = { id: reporterAccountId }
+  if (reporterName) {
+    fields.customfield_10037 = reporterName
   }
   if (dueDate) {
     fields.duedate = dueDate
