@@ -232,9 +232,10 @@ export default function TestCasesPage() {
       // 4. Jira 티켓 URL을 ticketLink로 업데이트
       if (jiraUrl) {
         await updateTestCase(newId, { ticketLink: jiraUrl })
+        toast({ title: '추가 완료 · Jira 티켓 생성됨' })
+      } else {
+        toast({ title: '추가 완료 (Jira 티켓 미생성)' })
       }
-
-      toast({ title: jiraUrl ? `추가 완료 · Jira 티켓 생성됨` : '추가 완료' })
     }
     setDialogOpen(false)
     await load()
