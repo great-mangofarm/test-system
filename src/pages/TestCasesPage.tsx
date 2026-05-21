@@ -288,7 +288,7 @@ export default function TestCasesPage() {
                 suiteId={suiteId!}
                 initial={editTarget ?? undefined}
                 users={users}
-                jiraProjectKey={product?.jiraProjectKey}
+                jiraProjectKey={editTarget ? undefined : product?.jiraProjectKey}
                 currentUserDisplayName={user?.displayName}
                 onSave={handleSave}
                 onCancel={() => setDialogOpen(false)}
