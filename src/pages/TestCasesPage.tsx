@@ -19,7 +19,6 @@ import {
 } from '@/lib/constants'
 import { toast } from '@/hooks/use-toast'
 import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X, Link, Check } from 'lucide-react'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
@@ -484,9 +483,34 @@ export default function TestCasesPage() {
                             return (inlineForm as unknown as Record<string, unknown>)[key] !== (tc as unknown as Record<string, unknown>)[key]
                           })
 
+                          // textarea 자동 높이 확장
+                          const ar = (el: HTMLTextAreaElement | null) => {
+                            if (!el) return
+                            el.style.height = 'auto'
+                            el.style.height = `${el.scrollHeight}px`
+                          }
+
+                          // 읽기 전용 텍스트 박스
+                          const ReadBox = ({ value }: { value: string }) => (
+                            <div className="bg-white rounded-md border px-3 py-2 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed min-h-[60px]">
+                              {value || <span className="text-slate-300">—</span>}
+                            </div>
+                          )
+
+                          // 자동 높이 textarea
+                          const AutoArea = ({ fieldKey, placeholder }: { fieldKey: keyof TestCase, placeholder?: string }) => (
+                            <textarea
+                              ref={ar}
+                              className="w-full text-sm bg-white border rounded-md px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none overflow-hidden min-h-[60px]"
+                              placeholder={placeholder}
+                              value={(f[fieldKey] as string) ?? ''}
+                              onChange={(e) => { setF(fieldKey, e.target.value); ar(e.target) }}
+                            />
+                          )
+
                           return (
-                          <div className="space-y-4">
-                            {/* 헤더: 변경사항 저장 버튼 (변경이 있을 때만 visible) */}
+                          <div className="max-w-4xl space-y-3">
+                            {/* 헤더 */}
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
                               <Button
@@ -498,183 +522,157 @@ export default function TestCasesPage() {
                               </Button>
                             </div>
 
-                            {/* 기본 정보 행 */}
-                            <div className="grid grid-cols-4 gap-3">
-                              <div>
-                                <p className="text-xs text-slate-400 mb-1">영역</p>
-                                {isEditing
-                                  ? <Input className="h-8 text-sm" value={f.area ?? ''} onChange={(e) => setF('area', e.target.value)} />
-                                  : <p className="text-sm font-medium text-slate-700">{tc.area || <span className="text-slate-300">—</span>}</p>
-                                }
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 mb-1">우선순위</p>
-                                {isEditing ? (
-                                  <Select value={f.priority as string} onValueChange={(v) => setF('priority', v)}>
-                                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="critical">긴급</SelectItem>
-                                      <SelectItem value="high">높음</SelectItem>
-                                      <SelectItem value="medium">보통</SelectItem>
-                                      <SelectItem value="low">낮음</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                ) : <span className={cn('text-xs px-2 py-0.5 rounded font-medium', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</span>}
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 mb-1">테스터</p>
-                                {isEditing ? (
-                                  <Select value={f.tester || '__none__'} onValueChange={(v) => setF('tester', v === '__none__' ? '' : v)}>
-                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">—</SelectItem>
-                                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <p className="text-sm font-medium text-slate-700">{tc.tester || <span className="text-slate-300">—</span>}</p>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 mb-1">담당 개발자</p>
-                                {isEditing ? (
-                                  <Select value={f.assignedDeveloper || '__none__'} onValueChange={(v) => setF('assignedDeveloper', v === '__none__' ? '' : v)}>
-                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">—</SelectItem>
-                                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                ) : canEditStatus ? (
-                                  <Select value={tc.assignedDeveloper || '__none__'} onValueChange={(v) => quickUpdateAssignedDeveloper(tc.id, v === '__none__' ? '' : v)}>
-                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">—</SelectItem>
-                                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <p className="text-sm font-medium text-slate-700">{tc.assignedDeveloper || <span className="text-slate-300">—</span>}</p>
-                                )}
-                              </div>
-                            </div>
+                            {/* 메인 2패널 */}
+                            <div className="grid grid-cols-[200px_1fr] gap-5 items-start">
 
-                            {/* 상태 행 */}
-                            <div className="grid grid-cols-4 gap-3">
-                              <div>
-                                <p className="text-xs text-slate-400 mb-1">테스트 결과</p>
-                                {(isAdmin || canEditStatus) ? (
-                                  <Select value={(isEditing ? f.status : tc.status) as string} onValueChange={(v) => isEditing ? setF('status', v) : quickUpdateStatus(tc.id, v as TestStatus)}>
-                                    <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', TEST_STATUS_COLORS[(isEditing ? f.status : tc.status) as TestStatus])}><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="not_tested">미테스트</SelectItem>
-                                      <SelectItem value="pass">통과</SelectItem>
-                                      <SelectItem value="fail">실패</SelectItem>
-                                      <SelectItem value="blocked">블로킹</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>{TEST_STATUS_LABELS[tc.status]}</span>}
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-400 mb-1">처리 상태</p>
-                                {isAdmin ? (
-                                  <Select value={(isEditing ? f.processingStatus : tc.processingStatus) as string} onValueChange={(v) => isEditing ? setF('processingStatus', v) : quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
-                                    <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[(isEditing ? f.processingStatus : tc.processingStatus) as ProcessingStatus])}><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="pending">미처리</SelectItem>
-                                      <SelectItem value="in_progress">처리중</SelectItem>
-                                      <SelectItem value="resolved">처리완료</SelectItem>
-                                      <SelectItem value="wont_fix">보류</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>{PROCESSING_STATUS_LABELS[tc.processingStatus]}</span>}
-                              </div>
-                              <div className="col-span-2">
-                                <p className="text-xs text-slate-400 mb-1">티켓 링크</p>
-                                {isEditing
-                                  ? <div className="flex items-center gap-1">
-                                      <Input className="h-8 text-sm" placeholder="https://..." value={f.ticketLink ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
-                                      {f.ticketLink && (
-                                        <a href={f.ticketLink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary">
-                                          <ExternalLink className="w-4 h-4" />
-                                        </a>
-                                      )}
-                                    </div>
-                                  : tc.ticketLink
-                                    ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline truncate"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
-                                    : <span className="text-slate-300 text-sm">—</span>
-                                }
-                              </div>
-                            </div>
-
-                            {/* 테스트 내용 */}
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                <p className="text-xs text-slate-400">테스트 절차</p>
-                                {isEditing
-                                  ? <Textarea className="text-sm bg-white min-h-[80px]" value={f.steps ?? ''} onChange={(e) => setF('steps', e.target.value)} />
-                                  : <div className="bg-white rounded-md border px-3 py-2 min-h-[60px]">
-                                      {tc.steps ? <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{tc.steps}</p> : <p className="text-sm text-slate-300">—</p>}
-                                    </div>
-                                }
-                              </div>
+                              {/* ── 왼쪽: 메타데이터 ── */}
                               <div className="space-y-3">
-                                <div className="space-y-1">
-                                  <p className="text-xs text-slate-400">기대 결과</p>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">영역</p>
                                   {isEditing
-                                    ? <Textarea className="text-sm bg-white" rows={2} value={f.expectedResult ?? ''} onChange={(e) => setF('expectedResult', e.target.value)} />
-                                    : <div className="bg-white rounded-md border px-3 py-2 min-h-[40px]">
-                                        {tc.expectedResult ? <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{tc.expectedResult}</p> : <p className="text-sm text-slate-300">—</p>}
-                                      </div>
-                                  }
+                                    ? <Input className="h-8 text-sm" value={f.area ?? ''} onChange={(e) => setF('area', e.target.value)} />
+                                    : <p className="text-sm font-medium text-slate-700">{tc.area || <span className="text-slate-300">—</span>}</p>}
                                 </div>
-                                <div className="space-y-1">
-                                  <p className="text-xs text-slate-400">실제 결과</p>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">우선순위</p>
+                                  {isEditing ? (
+                                    <Select value={f.priority as string} onValueChange={(v) => setF('priority', v)}>
+                                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="critical">긴급</SelectItem>
+                                        <SelectItem value="high">높음</SelectItem>
+                                        <SelectItem value="medium">보통</SelectItem>
+                                        <SelectItem value="low">낮음</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : <span className={cn('text-xs px-2 py-0.5 rounded font-medium', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</span>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">테스터</p>
+                                  {isEditing ? (
+                                    <Select value={f.tester || '__none__'} onValueChange={(v) => setF('tester', v === '__none__' ? '' : v)}>
+                                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none__">—</SelectItem>
+                                        {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : <p className="text-sm font-medium text-slate-700">{tc.tester || <span className="text-slate-300">—</span>}</p>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">담당 개발자</p>
+                                  {isEditing ? (
+                                    <Select value={f.assignedDeveloper || '__none__'} onValueChange={(v) => setF('assignedDeveloper', v === '__none__' ? '' : v)}>
+                                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none__">—</SelectItem>
+                                        {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : canEditStatus ? (
+                                    <Select value={tc.assignedDeveloper || '__none__'} onValueChange={(v) => quickUpdateAssignedDeveloper(tc.id, v === '__none__' ? '' : v)}>
+                                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none__">—</SelectItem>
+                                        {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : <p className="text-sm font-medium text-slate-700">{tc.assignedDeveloper || <span className="text-slate-300">—</span>}</p>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">테스트 결과</p>
+                                  {(isAdmin || canEditStatus) ? (
+                                    <Select value={(isEditing ? f.status : tc.status) as string} onValueChange={(v) => isEditing ? setF('status', v) : quickUpdateStatus(tc.id, v as TestStatus)}>
+                                      <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', TEST_STATUS_COLORS[(isEditing ? f.status : tc.status) as TestStatus])}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="not_tested">미테스트</SelectItem>
+                                        <SelectItem value="pass">통과</SelectItem>
+                                        <SelectItem value="fail">실패</SelectItem>
+                                        <SelectItem value="blocked">블로킹</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>{TEST_STATUS_LABELS[tc.status]}</span>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">처리 상태</p>
+                                  {isAdmin ? (
+                                    <Select value={(isEditing ? f.processingStatus : tc.processingStatus) as string} onValueChange={(v) => isEditing ? setF('processingStatus', v) : quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
+                                      <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[(isEditing ? f.processingStatus : tc.processingStatus) as ProcessingStatus])}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="pending">미처리</SelectItem>
+                                        <SelectItem value="in_progress">처리중</SelectItem>
+                                        <SelectItem value="resolved">처리완료</SelectItem>
+                                        <SelectItem value="wont_fix">보류</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>{PROCESSING_STATUS_LABELS[tc.processingStatus]}</span>}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">티켓 링크</p>
                                   {isEditing
-                                    ? <Textarea className="text-sm bg-white" rows={2} value={f.actualResult ?? ''} onChange={(e) => setF('actualResult', e.target.value)} />
-                                    : <div className="bg-white rounded-md border px-3 py-2 min-h-[40px]">
-                                        {tc.actualResult ? <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{tc.actualResult}</p> : <p className="text-sm text-slate-300">—</p>}
+                                    ? <div className="flex items-center gap-1">
+                                        <Input className="h-8 text-sm min-w-0" placeholder="https://..." value={f.ticketLink ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
+                                        {f.ticketLink && <a href={f.ticketLink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>}
                                       </div>
-                                  }
+                                    : tc.ticketLink
+                                      ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
+                                      : <span className="text-slate-300 text-sm">—</span>}
                                 </div>
                               </div>
-                            </div>
 
-                            {/* 개발자 코멘트 */}
-                            <div className="space-y-1">
-                              <p className="text-xs text-blue-500 font-medium">개발자 코멘트</p>
-                              {isEditing ? (
-                                <Textarea className="text-sm bg-white" rows={2} value={f.developerNote ?? ''} onChange={(e) => setF('developerNote', e.target.value)} />
-                              ) : canEditStatus ? (
-                                <textarea
-                                  className="w-full text-sm text-slate-700 bg-white border rounded-md p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
-                                  rows={2}
-                                  placeholder="코멘트를 입력하세요..."
-                                  value={editingNoteId === tc.id ? noteValue : tc.developerNote}
-                                  onFocus={() => { setEditingNoteId(tc.id); setNoteValue(tc.developerNote) }}
-                                  onChange={(e) => setNoteValue(e.target.value)}
-                                  onBlur={() => { if (editingNoteId === tc.id) saveNote(tc.id) }}
-                                />
-                              ) : (
-                                <div className="bg-white rounded-md border px-3 py-2 min-h-[40px]">
-                                  {tc.developerNote ? <p className="text-sm text-slate-700 whitespace-pre-wrap">{tc.developerNote}</p> : <p className="text-sm text-slate-300">—</p>}
+                              {/* ── 오른쪽: 테스트 내용 ── */}
+                              <div className="space-y-3">
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">테스트 절차</p>
+                                  {isEditing
+                                    ? <AutoArea fieldKey="steps" placeholder={"1. 앱 실행\n2. 버튼 클릭"} />
+                                    : <ReadBox value={tc.steps} />}
                                 </div>
-                              )}
-                            </div>
-
-                            {/* 이미지 */}
-                            <div className="space-y-1">
-                              <p className="text-xs text-slate-400">첨부 이미지 {tc.images.length > 0 && `(${tc.images.length})`}</p>
-                              {tc.images.length > 0
-                                ? <div className="flex flex-wrap gap-2">
-                                    {tc.images.map((url) => (
-                                      <img key={url} src={url}
-                                        className="w-24 h-24 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
-                                        onClick={() => setLightbox(url)} alt="" />
-                                    ))}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">기대 결과</p>
+                                    {isEditing
+                                      ? <AutoArea fieldKey="expectedResult" />
+                                      : <ReadBox value={tc.expectedResult} />}
                                   </div>
-                                : <p className="text-sm text-slate-300">—</p>
-                              }
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">실제 결과</p>
+                                    {isEditing
+                                      ? <AutoArea fieldKey="actualResult" />
+                                      : <ReadBox value={tc.actualResult} />}
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-blue-500 font-medium mb-1">개발자 코멘트</p>
+                                  {isEditing ? (
+                                    <AutoArea fieldKey="developerNote" placeholder="처리 내용, 수정 사항 등" />
+                                  ) : canEditStatus ? (
+                                    <textarea
+                                      ref={ar}
+                                      className="w-full text-sm text-slate-700 bg-white border rounded-md px-3 py-2 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px]"
+                                      placeholder="코멘트를 입력하세요..."
+                                      value={editingNoteId === tc.id ? noteValue : tc.developerNote}
+                                      onFocus={(e) => { setEditingNoteId(tc.id); setNoteValue(tc.developerNote); ar(e.target) }}
+                                      onChange={(e) => { setNoteValue(e.target.value); ar(e.target) }}
+                                      onBlur={() => { if (editingNoteId === tc.id) saveNote(tc.id) }}
+                                    />
+                                  ) : (
+                                    <ReadBox value={tc.developerNote} />
+                                  )}
+                                </div>
+                                {tc.images.length > 0 && (
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">첨부 이미지 ({tc.images.length})</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {tc.images.map((url) => (
+                                        <img key={url} src={url}
+                                          className="w-24 h-24 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+                                          onClick={() => setLightbox(url)} alt="" />
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                           )
