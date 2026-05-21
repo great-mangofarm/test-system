@@ -2,12 +2,16 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { useAuth, logout, sendPasswordReset } from '@/store/auth'
+import { useAuth, logout, sendPasswordReset, deleteUserDoc } from '@/store/auth'
 import type { UserProfile, UserRole } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { toast } from '@/hooks/use-toast'
-import { ChevronLeft, LogOut, Users, RotateCcw } from 'lucide-react'
+import { ChevronLeft, LogOut, Users, RotateCcw, Trash2 } from 'lucide-react'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
@@ -28,6 +32,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
   const [resetting, setResetting] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -65,6 +70,19 @@ export default function AdminPage() {
       toast({ title: '메일 발송 실패', variant: 'destructive' })
     } finally {
       setResetting(null)
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteTarget) return
+    try {
+      await deleteUserDoc(deleteTarget.uid)
+      setUsers((prev) => prev.filter((u) => u.uid !== deleteTarget.uid))
+      toast({ title: `${deleteTarget.displayName} 계정이 삭제되었습니다` })
+    } catch (e) {
+      toast({ title: '계정 삭제 실패', description: String((e as Error).message), variant: 'destructive' })
+    } finally {
+      setDeleteTarget(null)
     }
   }
 
@@ -114,16 +132,27 @@ export default function AdminPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {u.uid !== user?.uid && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-slate-500"
-                      disabled={resetting === u.email}
-                      onClick={() => handlePasswordReset(u.email)}
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      {resetting === u.email ? '발송 중...' : '비밀번호 초기화'}
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-slate-500"
+                        disabled={resetting === u.email}
+                        onClick={() => handlePasswordReset(u.email)}
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        {resetting === u.email ? '발송 중...' : '비밀번호 초기화'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(u)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        삭제
+                      </Button>
+                    </>
                   )}
                   {u.uid === user?.uid ? (
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_BADGE[u.role]}`}>
@@ -151,6 +180,24 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>계정 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTarget?.displayName}</strong> ({deleteTarget?.email}) 계정을 삭제하시겠습니까?<br />
+              삭제 후 해당 계정으로 로그인할 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

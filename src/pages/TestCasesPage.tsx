@@ -10,15 +10,16 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { TestCaseForm } from '@/components/TestCaseForm'
-import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase } from '@/lib/firestore'
+import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
 import { useAuth } from '@/store/auth'
-import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus } from '@/types'
+import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
 import {
   PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_LABELS, TEST_STATUS_COLORS,
   PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
 } from '@/lib/constants'
 import { toast } from '@/hooks/use-toast'
-import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X, Link, Check } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
@@ -37,6 +38,7 @@ export default function TestCasesPage() {
   const [_product, setProduct] = useState<Product | null>(null)
   const [suite, setSuite] = useState<TestSuite | null>(null)
   const [cases, setCases] = useState<TestCase[]>([])
+  const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<TestCase | null>(null)
@@ -45,27 +47,50 @@ export default function TestCasesPage() {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [noteValue, setNoteValue] = useState('')
+  // 인라인 편집 (관리자)
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null)
+  const [inlineForm, setInlineForm] = useState<Partial<TestCase>>({})
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterProcessing, setFilterProcessing] = useState('all')
   const [filterArea, setFilterArea] = useState('all')
+  const [filterDeveloper, setFilterDeveloper] = useState('all')
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
   useEffect(() => { load() }, [productId, suiteId])
 
+  // ESC 키로 라이트박스 닫기
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLightbox(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // URL 해시로 특정 티켓 자동 펼침
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '')
+    if (hash) {
+      setExpanded((prev) => new Set([...prev, hash]))
+      setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+    }
+  }, [cases])
+
   async function load() {
     if (!productId || !suiteId) return
     setLoading(true)
     try {
-      const [prods, suitesData, casesData] = await Promise.all([
-        getProducts(), getSuites(productId), getTestCases(suiteId),
+      const [prods, suitesData, casesData, usersData] = await Promise.all([
+        getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(),
       ])
       setProduct(prods.find((p) => p.id === productId) ?? null)
       setSuite(suitesData.find((s) => s.id === suiteId) ?? null)
       setCases(casesData)
+      setUsers(usersData)
     } finally {
       setLoading(false)
     }
@@ -73,10 +98,13 @@ export default function TestCasesPage() {
 
   const areas = Array.from(new Set(cases.map((c) => c.area).filter(Boolean)))
 
+  const developers = Array.from(new Set(cases.map((c) => c.assignedDeveloper).filter(Boolean)))
+
   const filtered = cases.filter((c) => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false
     if (filterProcessing !== 'all' && c.processingStatus !== filterProcessing) return false
     if (filterArea !== 'all' && c.area !== filterArea) return false
+    if (filterDeveloper !== 'all' && c.assignedDeveloper !== filterDeveloper) return false
     if (dateFrom && c.createdAt.slice(0, 10) < dateFrom) return false
     if (dateTo && c.createdAt.slice(0, 10) > dateTo) return false
     if (search && !c.title.toLowerCase().includes(search.toLowerCase()) && !c.area.toLowerCase().includes(search.toLowerCase())) return false
@@ -92,11 +120,19 @@ export default function TestCasesPage() {
   }
 
   function toggleExpand(id: string) {
+    const willExpand = !expanded.has(id)
     setExpanded((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+    if (willExpand && isAdmin) {
+      const tc = cases.find((c) => c.id === id)
+      if (tc) startInlineEdit(tc)
+    } else if (!willExpand && inlineEditId === id) {
+      setInlineEditId(null)
+      setInlineForm({})
+    }
   }
 
   function openCreate() {
@@ -140,15 +176,34 @@ export default function TestCasesPage() {
   }
 
   async function saveNote(id: string) {
+    const original = cases.find((c) => c.id === id)?.developerNote ?? ''
+    if (noteValue === original) return
     await updateTestCase(id, { developerNote: noteValue })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, developerNote: noteValue } : c))
-    setEditingNoteId(null)
-    toast({ title: '개발자 코멘트 저장됨' })
+  }
+
+  function startInlineEdit(tc: TestCase) {
+    setInlineEditId(tc.id)
+    setInlineForm({ ...tc })
+  }
+
+  async function saveInlineEdit(id: string) {
+    const merged = { ...cases.find((c) => c.id === id)!, ...inlineForm }
+    await updateTestCase(id, inlineForm)
+    setCases((prev) => prev.map((c) => c.id === id ? merged : c))
+    // re-init inlineForm from saved state so isDirty becomes false
+    setInlineForm({ ...merged })
+    toast({ title: '변경사항이 저장되었습니다' })
   }
 
   async function quickUpdateStatus(id: string, status: TestStatus) {
     await updateTestCase(id, { status })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, status } : c))
+  }
+
+  async function quickUpdateAssignedDeveloper(id: string, assignedDeveloper: string) {
+    await updateTestCase(id, { assignedDeveloper })
+    setCases((prev) => prev.map((c) => c.id === id ? { ...c, assignedDeveloper } : c))
   }
 
   const passRate = stats.total > 0 ? Math.round((stats.pass / stats.total) * 100) : 0
@@ -176,6 +231,7 @@ export default function TestCasesPage() {
               <TestCaseForm
                 suiteId={suiteId!}
                 initial={editTarget ?? undefined}
+                users={users}
                 onSave={handleSave}
                 onCancel={() => setDialogOpen(false)}
               />
@@ -238,6 +294,15 @@ export default function TestCasesPage() {
             </SelectContent>
           </Select>
         )}
+        {developers.length > 0 && (
+          <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
+            <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="담당개발자" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 개발자</SelectItem>
+              {developers.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <div className="flex items-center gap-1 text-sm text-slate-500">
           <span className="text-xs">등록일</span>
           <input
@@ -282,6 +347,7 @@ export default function TestCasesPage() {
                 <th className="px-4 py-3 text-left w-24">영역</th>
                 <th className="px-4 py-3 text-left w-16">우선순위</th>
                 <th className="px-4 py-3 text-left">제목</th>
+                <th className="px-4 py-3 text-left w-28">담당개발자</th>
                 <th className="px-4 py-3 text-left w-28">테스트결과</th>
                 <th className="px-4 py-3 text-left w-28">처리상태</th>
                 <th className="px-4 py-3 text-left w-24">등록일</th>
@@ -294,6 +360,7 @@ export default function TestCasesPage() {
                 <Fragment key={tc.id}>
                   {/* Main Row */}
                   <tr
+                    id={tc.id}
                     className={cn('hover:bg-slate-50 cursor-pointer transition-colors whitespace-nowrap', expanded.has(tc.id) ? 'bg-sky-50 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent')}
                     onClick={() => toggleExpand(tc.id)}
                   >
@@ -311,12 +378,12 @@ export default function TestCasesPage() {
                     </td>
                     <td className="px-4 py-2.5 max-w-xs">
                       <div className="font-medium text-slate-800 truncate">{tc.title}</div>
-                      {(tc.tester || tc.assignedDeveloper) && (
-                        <div className="text-xs text-slate-400 mt-0.5 flex gap-2">
-                          {tc.tester && <span>테스터: {tc.tester}</span>}
-                          {tc.assignedDeveloper && <span>개발자: {tc.assignedDeveloper}</span>}
-                        </div>
+                      {tc.tester && (
+                        <div className="text-xs text-slate-400 mt-0.5">테스터: {tc.tester}</div>
                       )}
+                    </td>
+                    <td className="px-4 py-2.5 text-sm text-slate-600 whitespace-nowrap">
+                      {tc.assignedDeveloper || <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                       {canEditStatus ? (
@@ -366,6 +433,16 @@ export default function TestCasesPage() {
                     </td>
                     <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7 text-slate-400"
+                          onClick={() => {
+                            const url = `${window.location.origin}${window.location.pathname}#${tc.id}`
+                            navigator.clipboard.writeText(url)
+                            toast({ title: '링크 복사됨' })
+                          }}
+                        >
+                          <Link className="w-3.5 h-3.5" />
+                        </Button>
                         {tc.ticketLink && (
                           <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer">
                             <Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="w-3.5 h-3.5" /></Button>
@@ -391,92 +468,212 @@ export default function TestCasesPage() {
                   {/* Detail Row */}
                   {expanded.has(tc.id) && (
                     <tr className="bg-slate-50/80">
-                      <td colSpan={9} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
-                        <div className="space-y-4 max-w-5xl">
+                      <td colSpan={10} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
+                        {(() => {
+                          const isEditing = inlineEditId === tc.id
+                          const f = isEditing ? inlineForm : tc
+                          const setF = (key: keyof TestCase, val: string) => setInlineForm((p) => ({ ...p, [key]: val }))
 
-                          {/* Meta info */}
-                          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm pb-3 border-b border-slate-200">
-                            <span className="text-slate-400">영역 <strong className="text-slate-700">{tc.area || '-'}</strong></span>
-                            <span className="text-slate-400">우선순위 <strong className={cn('px-1.5 py-0.5 rounded text-xs', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</strong></span>
-                            {tc.tester && <span className="text-slate-400">테스터 <strong className="text-slate-700">{tc.tester}</strong></span>}
-                            {tc.assignedDeveloper && <span className="text-slate-400">담당 개발자 <strong className="text-slate-700">{tc.assignedDeveloper}</strong></span>}
-                            {tc.ticketLink && (
-                              <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-xs hover:underline">
-                                <ExternalLink className="w-3 h-3" /> 티켓 링크
-                              </a>
-                            )}
-                            <span className="text-slate-400">등록일 <strong className="text-slate-700">{formatDate(tc.createdAt)}</strong></span>
-                          </div>
+                          const isDirty = isEditing && Object.keys(inlineForm).some((k) => {
+                            const key = k as keyof TestCase
+                            return (inlineForm as unknown as Record<string, unknown>)[key] !== (tc as unknown as Record<string, unknown>)[key]
+                          })
 
-                          {/* Steps + Results */}
-                          <div className="grid grid-cols-2 gap-4">
-                            {tc.steps && (
-                              <div className="space-y-1.5">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">테스트 절차</p>
-                                <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-white border rounded-md p-3">{tc.steps}</p>
-                              </div>
-                            )}
-                            <div className="space-y-3">
-                              {tc.expectedResult && (
-                                <div className="space-y-1.5">
-                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">기대 결과</p>
-                                  <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-white border rounded-md p-3">{tc.expectedResult}</p>
-                                </div>
-                              )}
-                              {tc.actualResult && (
-                                <div className="space-y-1.5">
-                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">실제 결과</p>
-                                  <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-white border rounded-md p-3">{tc.actualResult}</p>
-                                </div>
-                              )}
+                          return (
+                          <div className="space-y-4">
+                            {/* 헤더: 변경사항 저장 버튼 (변경이 있을 때만 visible) */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
+                              <Button
+                                size="sm"
+                                className={cn('h-7 text-xs transition-opacity', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+                                onClick={() => saveInlineEdit(tc.id)}
+                              >
+                                <Check className="w-3 h-3 mr-1"/>변경사항 저장
+                              </Button>
                             </div>
-                          </div>
 
-                          {/* Developer Note */}
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">개발자 코멘트</p>
-                            {canEditStatus ? (
-                              <div className="space-y-2">
+                            {/* 기본 정보 행 */}
+                            <div className="grid grid-cols-4 gap-3">
+                              <div>
+                                <p className="text-xs text-slate-400 mb-1">영역</p>
+                                {isEditing
+                                  ? <Input className="h-8 text-sm" value={f.area ?? ''} onChange={(e) => setF('area', e.target.value)} />
+                                  : <p className="text-sm font-medium text-slate-700">{tc.area || <span className="text-slate-300">—</span>}</p>
+                                }
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 mb-1">우선순위</p>
+                                {isEditing ? (
+                                  <Select value={f.priority as string} onValueChange={(v) => setF('priority', v)}>
+                                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="critical">긴급</SelectItem>
+                                      <SelectItem value="high">높음</SelectItem>
+                                      <SelectItem value="medium">보통</SelectItem>
+                                      <SelectItem value="low">낮음</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : <span className={cn('text-xs px-2 py-0.5 rounded font-medium', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</span>}
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 mb-1">테스터</p>
+                                {isEditing ? (
+                                  <Select value={f.tester || '__none__'} onValueChange={(v) => setF('tester', v === '__none__' ? '' : v)}>
+                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">—</SelectItem>
+                                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <p className="text-sm font-medium text-slate-700">{tc.tester || <span className="text-slate-300">—</span>}</p>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 mb-1">담당 개발자</p>
+                                {isEditing ? (
+                                  <Select value={f.assignedDeveloper || '__none__'} onValueChange={(v) => setF('assignedDeveloper', v === '__none__' ? '' : v)}>
+                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">—</SelectItem>
+                                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                ) : canEditStatus ? (
+                                  <Select value={tc.assignedDeveloper || '__none__'} onValueChange={(v) => quickUpdateAssignedDeveloper(tc.id, v === '__none__' ? '' : v)}>
+                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">—</SelectItem>
+                                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <p className="text-sm font-medium text-slate-700">{tc.assignedDeveloper || <span className="text-slate-300">—</span>}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 상태 행 */}
+                            <div className="grid grid-cols-4 gap-3">
+                              <div>
+                                <p className="text-xs text-slate-400 mb-1">테스트 결과</p>
+                                {(isAdmin || canEditStatus) ? (
+                                  <Select value={(isEditing ? f.status : tc.status) as string} onValueChange={(v) => isEditing ? setF('status', v) : quickUpdateStatus(tc.id, v as TestStatus)}>
+                                    <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', TEST_STATUS_COLORS[(isEditing ? f.status : tc.status) as TestStatus])}><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="not_tested">미테스트</SelectItem>
+                                      <SelectItem value="pass">통과</SelectItem>
+                                      <SelectItem value="fail">실패</SelectItem>
+                                      <SelectItem value="blocked">블로킹</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>{TEST_STATUS_LABELS[tc.status]}</span>}
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-400 mb-1">처리 상태</p>
+                                {isAdmin ? (
+                                  <Select value={(isEditing ? f.processingStatus : tc.processingStatus) as string} onValueChange={(v) => isEditing ? setF('processingStatus', v) : quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
+                                    <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[(isEditing ? f.processingStatus : tc.processingStatus) as ProcessingStatus])}><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="pending">미처리</SelectItem>
+                                      <SelectItem value="in_progress">처리중</SelectItem>
+                                      <SelectItem value="resolved">처리완료</SelectItem>
+                                      <SelectItem value="wont_fix">보류</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>{PROCESSING_STATUS_LABELS[tc.processingStatus]}</span>}
+                              </div>
+                              <div className="col-span-2">
+                                <p className="text-xs text-slate-400 mb-1">티켓 링크</p>
+                                {isEditing
+                                  ? <div className="flex items-center gap-1">
+                                      <Input className="h-8 text-sm" placeholder="https://..." value={f.ticketLink ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
+                                      {f.ticketLink && (
+                                        <a href={f.ticketLink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary">
+                                          <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  : tc.ticketLink
+                                    ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline truncate"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
+                                    : <span className="text-slate-300 text-sm">—</span>
+                                }
+                              </div>
+                            </div>
+
+                            {/* 테스트 내용 */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <p className="text-xs text-slate-400">테스트 절차</p>
+                                {isEditing
+                                  ? <Textarea className="text-sm bg-white min-h-[80px]" value={f.steps ?? ''} onChange={(e) => setF('steps', e.target.value)} />
+                                  : <div className="bg-white rounded-md border px-3 py-2 min-h-[60px]">
+                                      {tc.steps ? <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{tc.steps}</p> : <p className="text-sm text-slate-300">—</p>}
+                                    </div>
+                                }
+                              </div>
+                              <div className="space-y-3">
+                                <div className="space-y-1">
+                                  <p className="text-xs text-slate-400">기대 결과</p>
+                                  {isEditing
+                                    ? <Textarea className="text-sm bg-white" rows={2} value={f.expectedResult ?? ''} onChange={(e) => setF('expectedResult', e.target.value)} />
+                                    : <div className="bg-white rounded-md border px-3 py-2 min-h-[40px]">
+                                        {tc.expectedResult ? <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{tc.expectedResult}</p> : <p className="text-sm text-slate-300">—</p>}
+                                      </div>
+                                  }
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs text-slate-400">실제 결과</p>
+                                  {isEditing
+                                    ? <Textarea className="text-sm bg-white" rows={2} value={f.actualResult ?? ''} onChange={(e) => setF('actualResult', e.target.value)} />
+                                    : <div className="bg-white rounded-md border px-3 py-2 min-h-[40px]">
+                                        {tc.actualResult ? <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{tc.actualResult}</p> : <p className="text-sm text-slate-300">—</p>}
+                                      </div>
+                                  }
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 개발자 코멘트 */}
+                            <div className="space-y-1">
+                              <p className="text-xs text-blue-500 font-medium">개발자 코멘트</p>
+                              {isEditing ? (
+                                <Textarea className="text-sm bg-white" rows={2} value={f.developerNote ?? ''} onChange={(e) => setF('developerNote', e.target.value)} />
+                              ) : canEditStatus ? (
                                 <textarea
-                                  className="w-full text-sm text-slate-700 bg-white border border-blue-200 rounded-md p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  rows={3}
-                                  placeholder="개발자 코멘트를 입력하세요..."
+                                  className="w-full text-sm text-slate-700 bg-white border rounded-md p-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+                                  rows={2}
+                                  placeholder="코멘트를 입력하세요..."
                                   value={editingNoteId === tc.id ? noteValue : tc.developerNote}
                                   onFocus={() => { setEditingNoteId(tc.id); setNoteValue(tc.developerNote) }}
                                   onChange={(e) => setNoteValue(e.target.value)}
+                                  onBlur={() => { if (editingNoteId === tc.id) saveNote(tc.id) }}
                                 />
-                                {editingNoteId === tc.id && (
-                                  <div className="flex gap-2">
-                                    <Button size="sm" className="h-7 text-xs" onClick={() => saveNote(tc.id)}>저장</Button>
-                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingNoteId(null) }}>취소</Button>
-                                  </div>
-                                )}
-                              </div>
-                            ) : tc.developerNote ? (
-                              <p className="text-slate-700 whitespace-pre-wrap text-sm leading-relaxed bg-blue-50 border border-blue-100 rounded-md p-3">{tc.developerNote}</p>
-                            ) : (
-                              <p className="text-slate-400 text-sm">-</p>
-                            )}
-                          </div>
-
-                          {/* Images */}
-                          {tc.images.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">첨부 이미지 ({tc.images.length})</p>
-                              <div className="flex flex-wrap gap-2">
-                                {tc.images.map((url) => (
-                                  <img
-                                    key={url}
-                                    src={url}
-                                    className="w-28 h-28 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
-                                    onClick={() => setLightbox(url)}
-                                    alt=""
-                                  />
-                                ))}
-                              </div>
+                              ) : (
+                                <div className="bg-white rounded-md border px-3 py-2 min-h-[40px]">
+                                  {tc.developerNote ? <p className="text-sm text-slate-700 whitespace-pre-wrap">{tc.developerNote}</p> : <p className="text-sm text-slate-300">—</p>}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+
+                            {/* 이미지 */}
+                            <div className="space-y-1">
+                              <p className="text-xs text-slate-400">첨부 이미지 {tc.images.length > 0 && `(${tc.images.length})`}</p>
+                              {tc.images.length > 0
+                                ? <div className="flex flex-wrap gap-2">
+                                    {tc.images.map((url) => (
+                                      <img key={url} src={url}
+                                        className="w-24 h-24 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
+                                        onClick={() => setLightbox(url)} alt="" />
+                                    ))}
+                                  </div>
+                                : <p className="text-sm text-slate-300">—</p>
+                              }
+                            </div>
+                          </div>
+                          )
+                        })()}
                       </td>
                     </tr>
                   )}

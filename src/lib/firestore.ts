@@ -10,7 +10,13 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Product, TestSuite, TestCase } from '@/types'
+import type { Product, TestSuite, TestCase, UserProfile } from '@/types'
+
+// --- Users ---
+export async function getUsers(): Promise<UserProfile[]> {
+  const snap = await getDocs(collection(db, 'users'))
+  return snap.docs.map((d) => d.data() as UserProfile).sort((a, b) => a.displayName.localeCompare(b.displayName))
+}
 
 // --- Products ---
 export async function getProducts(): Promise<Product[]> {

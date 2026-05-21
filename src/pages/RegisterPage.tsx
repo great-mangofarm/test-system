@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { register } from '@/store/auth'
+import { register, logout } from '@/store/auth'
+import { toast } from '@/hooks/use-toast'
 import { UserPlus, Eye, EyeOff } from 'lucide-react'
 
 export default function RegisterPage() {
@@ -37,7 +38,9 @@ export default function RegisterPage() {
     setError('')
     try {
       await register(email, password, displayName)
-      navigate('/')
+      await logout()
+      toast({ title: '계정 등록 완료', description: '로그인해주세요' })
+      navigate('/login', { replace: true })
     } catch (err: unknown) {
       const code = (err as { code?: string }).code
       if (code === 'auth/email-already-in-use') {

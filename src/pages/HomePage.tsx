@@ -27,7 +27,7 @@ import {
   getProducts, createProduct, updateProduct, deleteProduct, reorderProducts,
   getSuites, createSuite, updateSuite, deleteSuite, reorderSuites,
 } from '@/lib/firestore'
-import { useAuth, logout } from '@/store/auth'
+import { useAuth, logout, deleteAccount } from '@/store/auth'
 import type { Product, TestSuite, SuiteType } from '@/types'
 import {
   Plus, Package, ClipboardList, ArrowRight, Pencil, Trash2,
@@ -185,6 +185,7 @@ export default function HomePage() {
   const [deleteSuite_, setDeleteSuite_] = useState<TestSuite | null>(null)
 
   const [pwModalOpen, setPwModalOpen] = useState(false)
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -298,6 +299,24 @@ export default function HomePage() {
   async function handleLogout() {
     await logout()
     navigate('/login')
+  }
+
+  async function handleDeleteAccount() {
+    try {
+      await deleteAccount()
+      navigate('/login')
+    } catch (e: unknown) {
+      const code = (e as { code?: string }).code
+      if (code === 'auth/requires-recent-login') {
+        toast({
+          title: '재로그인 필요',
+          description: '보안을 위해 로그아웃 후 다시 로그인하여 탈퇴해주세요',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: '계정 삭제 실패', description: String((e as Error).message), variant: 'destructive' })
+      }
+    }
   }
 
   return (
@@ -529,6 +548,23 @@ export default function HomePage() {
       <Dialog open={pwModalOpen} onOpenChange={setPwModalOpen}>
         <ChangePasswordModal onClose={() => setPwModalOpen(false)} />
       </Dialog>
+
+      <AlertDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>계정 탈퇴</AlertDialogTitle>
+            <AlertDialogDescription>
+              정말 탈퇴하시겠습니까? 계정이 영구 삭제되며 복구할 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              탈퇴하기
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

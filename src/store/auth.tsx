@@ -10,8 +10,9 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  deleteUser,
 } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import type { UserProfile, UserRole } from '@/types'
 
@@ -33,8 +34,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
-        setUser(snap.exists() ? (snap.data() as UserProfile) : null)
+        let snap = await getDoc(doc(db, 'users', firebaseUser.uid))
+        // Firestore 문서가 아직 없으면 (등록 직후 race condition) 잠시 후 재시도
+        if (!snap.exists()) {
+          await new Promise((r) => setTimeout(r, 800))
+          snap = await getDoc(doc(db, 'users', firebaseUser.uid))
+        }
+        if (snap.exists()) {
+          setUser(snap.data() as UserProfile)
+        } else {
+          // Firestore 문서 없음 = 삭제된 계정 → 강제 로그아웃
+          await signOut(auth)
+          setUser(null)
+        }
       } else {
         setUser(null)
       }
@@ -77,4 +89,17 @@ export async function changePassword(newPassword: string): Promise<void> {
 
 export async function sendPasswordReset(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email)
+}
+
+// 본인 계정 삭제 (Firebase Auth + Firestore)
+export async function deleteAccount(): Promise<void> {
+  if (!auth.currentUser) throw new Error('not_logged_in')
+  const uid = auth.currentUser.uid
+  await deleteDoc(doc(db, 'users', uid))
+  await deleteUser(auth.currentUser)
+}
+
+// 관리자가 다른 계정 삭제 (Firestore 문서만 삭제 → 앱 접근 차단)
+export async function deleteUserDoc(uid: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid))
 }
