@@ -34,7 +34,7 @@ export default function TestCasesPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const canEditStatus = user?.role === 'admin' || user?.role === 'developer'
-  const [_product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<Product | null>(null)
   const [suite, setSuite] = useState<TestSuite | null>(null)
   const [cases, setCases] = useState<TestCase[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -149,6 +149,31 @@ export default function TestCasesPage() {
     setDialogOpen(true)
   }
 
+  async function createJiraTicket(data: FormData): Promise<string | null> {
+    const jiraProjectKey = product?.jiraProjectKey
+    if (!jiraProjectKey) return null
+    try {
+      const res = await fetch('/api/jira', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectKey: jiraProjectKey,
+          title: data.title,
+          area: data.area,
+          priority: data.priority,
+          steps: data.steps,
+          expectedResult: data.expectedResult,
+          actualResult: data.actualResult,
+        }),
+      })
+      if (!res.ok) return null
+      const { issueUrl } = await res.json()
+      return issueUrl
+    } catch {
+      return null
+    }
+  }
+
   async function handleSave(data: FormData) {
     if (!productId || !suiteId) return
     if (editTarget) {
@@ -156,11 +181,15 @@ export default function TestCasesPage() {
       toast({ title: '수정 완료' })
     } else {
       const order = cases.length > 0 ? Math.max(...cases.map((c) => c.order)) + 1 : 0
+      // Jira 티켓 생성 후 링크 자동 입력
+      const jiraUrl = await createJiraTicket(data)
       await createTestCase({
-        ...data, suiteId, productId, order,
+        ...data,
+        ticketLink: jiraUrl ?? data.ticketLink,
+        suiteId, productId, order,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       })
-      toast({ title: '추가 완료' })
+      toast({ title: jiraUrl ? `추가 완료 · Jira 티켓 생성됨` : '추가 완료' })
     }
     setDialogOpen(false)
     await load()

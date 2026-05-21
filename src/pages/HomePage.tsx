@@ -175,7 +175,7 @@ export default function HomePage() {
   const [loadingSuites, setLoadingSuites] = useState(false)
 
   const [productDialog, setProductDialog] = useState<ProductDialog | null>(null)
-  const [productForm, setProductForm] = useState({ name: '', description: '' })
+  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '' })
   const [productSaving, setProductSaving] = useState(false)
   const [deleteProduct_, setDeleteProduct_] = useState<Product | null>(null)
 
@@ -233,11 +233,11 @@ export default function HomePage() {
 
   // Product CRUD
   function openProductCreate() {
-    setProductForm({ name: '', description: '' })
+    setProductForm({ name: '', description: '', jiraProjectKey: '' })
     setProductDialog({ mode: 'create' })
   }
   function openProductEdit(p: Product) {
-    setProductForm({ name: p.name, description: p.description })
+    setProductForm({ name: p.name, description: p.description, jiraProjectKey: p.jiraProjectKey ?? '' })
     setProductDialog({ mode: 'edit', target: p })
   }
   async function handleProductSave() {
@@ -460,6 +460,11 @@ export default function HomePage() {
               <Label>설명</Label>
               <Textarea placeholder="테스트 대상에 대한 간단한 설명" value={productForm.description} rows={3}
                 onChange={(e) => setProductForm((f) => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Jira 프로젝트 키 <span className="text-xs text-slate-400 font-normal">— 티켓 자동 생성 연동</span></Label>
+              <Input placeholder="예: EPC, ADMIN" value={productForm.jiraProjectKey}
+                onChange={(e) => setProductForm((f) => ({ ...f, jiraProjectKey: e.target.value.toUpperCase() }))} />
             </div>
           </div>
           <DialogFooter>

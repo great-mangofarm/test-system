@@ -18,6 +18,7 @@ export interface Product {
   id: string
   name: string
   description: string
+  jiraProjectKey: string
   order: number
   createdAt: string
 }
