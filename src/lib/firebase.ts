@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
-import { getAuth, browserLocalPersistence, setPersistence } from 'firebase/auth'
+import { getAuth } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,6 +15,5 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
+// Firebase 브라우저 기본값이 browserLocalPersistence — 별도 setPersistence 불필요
 export const auth = getAuth(app)
-// 모든 탭에서 로그인 상태 공유되도록 localStorage 고정
-setPersistence(auth, browserLocalPersistence)

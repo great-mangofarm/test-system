@@ -187,7 +187,7 @@ export default function AdminPage() {
             <AlertDialogTitle>계정 삭제</AlertDialogTitle>
             <AlertDialogDescription>
               <strong>{deleteTarget?.displayName}</strong> ({deleteTarget?.email}) 계정을 삭제하시겠습니까?<br />
-              삭제 후 해당 계정으로 로그인할 수 없습니다.
+              앱 접근이 즉시 차단됩니다. (Firebase 인증 콘솔에는 계정이 남을 수 있습니다)
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
