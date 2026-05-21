@@ -215,27 +215,17 @@ export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, onS
             </div>
           </div>
 
-          {/* ── 기한 / 기획서링크 ── */}
-          <SectionHeader>기한 / 기획서링크</SectionHeader>
+          {/* ── 기한 ── */}
+          <SectionHeader>기한</SectionHeader>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>기한</Label>
-              <input
-                type="date"
-                value={form.dueDate}
-                onChange={(e) => set('dueDate', e.target.value)}
-                className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>기획서링크</Label>
-              <Input
-                placeholder="https://..."
-                value={form.planningLink}
-                onChange={(e) => set('planningLink', e.target.value)}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label>기한</Label>
+            <input
+              type="date"
+              value={form.dueDate}
+              onChange={(e) => set('dueDate', e.target.value)}
+              className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
           </div>
 
           {/* ── 테스트 내용 ── */}

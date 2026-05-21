@@ -694,17 +694,6 @@ export default function TestCasesPage() {
                                       ? <p className="text-sm font-medium text-slate-700">{tc.dueDate}</p>
                                       : <span className="text-slate-300 text-sm">—</span>}
                                 </div>
-                                <div>
-                                  <p className="text-xs text-slate-400 mb-1">기획서링크</p>
-                                  {isEditing
-                                    ? <div className="flex items-center gap-1">
-                                        <Input className="h-8 text-sm min-w-0" placeholder="https://..." value={f.planningLink ?? ''} onChange={(e) => setF('planningLink', e.target.value)} />
-                                        {f.planningLink && <a href={f.planningLink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>}
-                                      </div>
-                                    : tc.planningLink
-                                      ? <a href={tc.planningLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.planningLink}</a>
-                                      : <span className="text-slate-300 text-sm">—</span>}
-                                </div>
                               </div>
 
                               {/* ── 오른쪽: 테스트 내용 ── */}
