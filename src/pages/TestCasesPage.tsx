@@ -509,7 +509,7 @@ export default function TestCasesPage() {
                           )
 
                           return (
-                          <div className="max-w-4xl space-y-3">
+                          <div className="space-y-3">
                             {/* 헤더 */}
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
