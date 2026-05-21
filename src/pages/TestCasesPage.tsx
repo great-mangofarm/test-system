@@ -74,8 +74,13 @@ export default function TestCasesPage() {
   // URL 해시로 특정 티켓 자동 펼침
   useEffect(() => {
     const hash = window.location.hash.replace('#', '')
-    if (hash) {
+    if (hash && cases.length > 0) {
       setExpanded((prev) => new Set([...prev, hash]))
+      // 어드민은 바로 편집 가능 상태로 열기
+      if (isAdmin) {
+        const tc = cases.find((c) => c.id === hash)
+        if (tc) startInlineEdit(tc)
+      }
       setTimeout(() => document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
     }
   }, [cases])
