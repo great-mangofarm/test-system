@@ -154,10 +154,25 @@ export default function TestCasesPage() {
     const jiraProjectKey = product?.jiraProjectKey
     if (!jiraProjectKey) return null
     try {
-      // 요청자: "{팀} {이름}" 문자열로 전송
+      // 요청자: "{팀} {이름}" 문자열
       const reporterName = user
         ? [user.team, user.displayName].filter(Boolean).join(' ')
         : undefined
+
+      // 담당자: 담당개발자 displayName → 이메일 → Jira accountId 자동 조회
+      let assigneeAccountId: string | undefined
+      if (data.assignedDeveloper) {
+        const assigneeUser = users.find((u) => u.displayName === data.assignedDeveloper)
+        if (assigneeUser?.email) {
+          try {
+            const r = await fetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
+            if (r.ok) {
+              const d = await r.json()
+              if (d?.accountId) assigneeAccountId = d.accountId
+            }
+          } catch { /* 조회 실패 시 담당자 없이 진행 */ }
+        }
+      }
 
       const res = await fetch('/api/jira', {
         method: 'POST',
@@ -171,7 +186,7 @@ export default function TestCasesPage() {
           expectedResult: data.expectedResult,
           actualResult: data.actualResult,
           issueType: jiraFields.issueType,
-          assigneeAccountId: jiraFields.assigneeAccountId || null,
+          assigneeAccountId: assigneeAccountId || null,
           reporterName: reporterName || undefined,
           dueDate: data.dueDate || undefined,
           // 이슈트래커 URL을 기획서링크로 전송
