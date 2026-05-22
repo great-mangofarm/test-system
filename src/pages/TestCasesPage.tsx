@@ -60,6 +60,7 @@ export default function TestCasesPage() {
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [hideCompleted, setHideCompleted] = useState(false)
 
   useEffect(() => { load() }, [productId, suiteId])
 
@@ -107,6 +108,7 @@ export default function TestCasesPage() {
   const developers = Array.from(new Set(cases.map((c) => c.assignedDeveloper).filter(Boolean)))
 
   const filtered = cases.filter((c) => {
+    if (hideCompleted && c.status === 'pass' && c.processingStatus === 'resolved') return false
     if (filterStatus !== 'all' && c.status !== filterStatus) return false
     if (filterProcessing !== 'all' && c.processingStatus !== filterProcessing) return false
     if (filterArea !== 'all' && c.area !== filterArea) return false
@@ -433,7 +435,16 @@ export default function TestCasesPage() {
             </button>
           )}
         </div>
-        <span className="text-xs text-slate-400 ml-auto">{filtered.length}건</span>
+        <label className="flex items-center gap-1.5 ml-auto cursor-pointer select-none text-xs text-slate-500 hover:text-slate-700">
+          <input
+            type="checkbox"
+            checked={hideCompleted}
+            onChange={(e) => setHideCompleted(e.target.checked)}
+            className="w-3.5 h-3.5 accent-primary"
+          />
+          완료 이슈 숨기기
+        </label>
+        <span className="text-xs text-slate-400">{filtered.length}건</span>
       </div>
 
       {/* Table */}
@@ -514,7 +525,7 @@ export default function TestCasesPage() {
                       )}
                     </td>
                     <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      {isAdmin ? (
+                      {canEditStatus ? (
                         <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
                           <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium px-2', PROCESSING_STATUS_COLORS[tc.processingStatus])}>
                             <SelectValue />
@@ -700,7 +711,7 @@ export default function TestCasesPage() {
                                 </div>
                                 <div>
                                   <p className="text-xs text-slate-400 mb-1">처리 상태</p>
-                                  {isAdmin ? (
+                                  {canEditStatus ? (
                                     <Select value={(isEditing ? f.processingStatus : tc.processingStatus) as string} onValueChange={(v) => isEditing ? setF('processingStatus', v) : quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
                                       <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[(isEditing ? f.processingStatus : tc.processingStatus) as ProcessingStatus])}><SelectValue /></SelectTrigger>
                                       <SelectContent>
