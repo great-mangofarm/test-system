@@ -48,6 +48,8 @@ export interface TestCase {
   ticketLink: string
   developerNote: string
   images: string[]
+  resultNote: string
+  resultImages: string[]
   tester: string
   assignedDeveloper: string
   priority: Priority

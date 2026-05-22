@@ -18,11 +18,88 @@ import {
   PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_LABELS, TEST_STATUS_COLORS,
   PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
 } from '@/lib/constants'
-import { toast } from '@/hooks/use-toast'
-import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X, Link, Check } from 'lucide-react'
+import { toast, useToast } from '@/hooks/use-toast'
+import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X, Link, Check, ImagePlus, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { uploadImage } from '@/lib/firestore'
 
 type FormData = Omit<TestCase, 'id' | 'suiteId' | 'productId' | 'createdAt' | 'updatedAt' | 'order'>
+
+function ResultFeedback({
+  tc, onLightbox, onUpdate,
+}: {
+  tc: TestCase
+  onLightbox: (url: string) => void
+  onUpdate: (patch: Partial<TestCase>) => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const resultImages = tc.resultImages ?? []
+  const resultNote = tc.resultNote ?? ''
+  const { toast } = useToast()
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    setUploading(true)
+    try {
+      const urls = await Promise.all(files.map((f) => uploadImage(f)))
+      const newImages = [...resultImages, ...urls]
+      await updateTestCase(tc.id, { resultImages: newImages })
+      onUpdate({ resultImages: newImages })
+    } catch {
+      toast({ variant: 'destructive', title: '이미지 업로드 실패' })
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function removeImage(url: string) {
+    const newImages = resultImages.filter((u) => u !== url)
+    await updateTestCase(tc.id, { resultImages: newImages })
+    onUpdate({ resultImages: newImages })
+  }
+
+  async function handleBlur(e: React.FocusEvent<HTMLTextAreaElement>) {
+    if (e.target.value !== resultNote) {
+      await updateTestCase(tc.id, { resultNote: e.target.value })
+      onUpdate({ resultNote: e.target.value })
+    }
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-amber-500 font-medium mb-1">테스트 결과 피드백</p>
+      <textarea
+        className="w-full text-sm text-slate-700 bg-white border rounded-md px-3 py-2 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px]"
+        placeholder="테스트 결과에 대한 피드백을 입력하세요..."
+        defaultValue={resultNote}
+        onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px` }}
+        onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px` }}
+        onBlur={handleBlur}
+      />
+      <div className="flex flex-wrap gap-2 mt-2">
+        {resultImages.map((url) => (
+          <div key={url} className="relative group">
+            <img src={url}
+              className="w-20 h-20 object-cover rounded border cursor-pointer hover:opacity-80"
+              onClick={() => onLightbox(url)} alt="" />
+            <button
+              type="button"
+              onClick={() => removeImage(url)}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full items-center justify-center hidden group-hover:flex"
+            ><X className="w-3 h-3" /></button>
+          </div>
+        ))}
+        <label className="w-20 h-20 border-2 border-dashed border-slate-300 rounded flex flex-col items-center justify-center text-slate-400 hover:border-primary hover:text-primary transition-colors cursor-pointer">
+          {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+          <span className="text-xs mt-1">{uploading ? '업로드중' : '추가'}</span>
+          <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+      </div>
+    </div>
+  )
+}
 
 function formatDate(iso: string) {
   if (!iso) return '-'
@@ -223,6 +300,8 @@ export default function TestCasesPage() {
       // 1. Firestore 이슈 먼저 생성 → ID 확보
       const newId = await createTestCase({
         ...data,
+        resultNote: '',
+        resultImages: [],
         suiteId, productId, order,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       })
@@ -803,6 +882,15 @@ export default function TestCasesPage() {
                                       ))}
                                     </div>
                                   </div>
+                                )}
+
+                                {/* 테스트 결과 피드백 */}
+                                {canEditStatus && (
+                                  <ResultFeedback
+                                    tc={tc}
+                                    onLightbox={setLightbox}
+                                    onUpdate={(patch) => setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, ...patch } : c))}
+                                  />
                                 )}
                               </div>
                             </div>

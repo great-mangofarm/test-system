@@ -37,6 +37,8 @@ const defaultForm: FormData = {
   ticketLink: '',
   developerNote: '',
   images: [],
+  resultNote: '',
+  resultImages: [],
   tester: '',
   assignedDeveloper: '',
   priority: 'medium',
