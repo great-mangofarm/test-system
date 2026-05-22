@@ -289,16 +289,7 @@ export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, cur
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>개발자 메모</Label>
-            <Textarea
-              placeholder="처리 내용, 수정 사항 등"
-              value={form.developerNote}
-              onChange={(e) => set('developerNote', e.target.value)}
-              rows={2}
-              className="resize-y"
-            />
-          </div>
+
 
           {/* ── Jira 연동 ── */}
           {jiraProjectKey && (

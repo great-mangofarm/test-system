@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,7 +19,7 @@ import {
   PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
 } from '@/lib/constants'
 import { toast, useToast } from '@/hooks/use-toast'
-import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X, Link, Check, ImagePlus, Loader2 } from 'lucide-react'
+import { Plus, ChevronLeft, Pencil, Trash2, ExternalLink, Image, ChevronDown, ChevronUp, X, Link, Check, ImagePlus, Loader2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { uploadImage } from '@/lib/firestore'
 
@@ -36,26 +36,49 @@ function ResultFeedback({
   const resultImages = tc.resultImages ?? []
   const resultNote = tc.resultNote ?? ''
   const { toast } = useToast()
+  const areaRef = useRef<HTMLTextAreaElement>(null)
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
+  async function uploadFiles(files: File[]) {
     if (!files.length) return
     setUploading(true)
     try {
       const urls = await Promise.all(files.map((f) => uploadImage(f)))
-      const newImages = [...resultImages, ...urls]
+      const newImages = [...(tc.resultImages ?? []), ...urls]
       await updateTestCase(tc.id, { resultImages: newImages })
       onUpdate({ resultImages: newImages })
     } catch {
       toast({ variant: 'destructive', title: '이미지 업로드 실패' })
     } finally {
       setUploading(false)
-      e.target.value = ''
     }
   }
 
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    await uploadFiles(Array.from(e.target.files ?? []))
+    e.target.value = ''
+  }
+
+  // 붙여넣기 이미지 지원
+  useEffect(() => {
+    const el = areaRef.current
+    if (!el) return
+    function onPaste(e: ClipboardEvent) {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const imageFiles = items
+        .filter((i) => i.type.startsWith('image/'))
+        .map((i) => i.getAsFile())
+        .filter((f): f is File => f !== null)
+      if (imageFiles.length) {
+        e.preventDefault()
+        uploadFiles(imageFiles)
+      }
+    }
+    el.addEventListener('paste', onPaste)
+    return () => el.removeEventListener('paste', onPaste)
+  }, [tc.resultImages])
+
   async function removeImage(url: string) {
-    const newImages = resultImages.filter((u) => u !== url)
+    const newImages = (tc.resultImages ?? []).filter((u) => u !== url)
     await updateTestCase(tc.id, { resultImages: newImages })
     onUpdate({ resultImages: newImages })
   }
@@ -64,18 +87,25 @@ function ResultFeedback({
     if (e.target.value !== resultNote) {
       await updateTestCase(tc.id, { resultNote: e.target.value })
       onUpdate({ resultNote: e.target.value })
+      toast({ title: '피드백이 저장되었습니다' })
     }
+  }
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
   }
 
   return (
     <div>
       <p className="text-xs text-amber-500 font-medium mb-1">테스트 결과 피드백</p>
       <textarea
+        ref={areaRef}
         className="w-full text-sm text-slate-700 bg-white border rounded-md px-3 py-2 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px]"
-        placeholder="테스트 결과에 대한 피드백을 입력하세요..."
+        placeholder="테스트 결과에 대한 피드백을 입력하세요... (Ctrl+V로 이미지 붙여넣기 가능)"
         defaultValue={resultNote}
-        onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px` }}
-        onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${e.target.scrollHeight}px` }}
+        onFocus={(e) => autoResize(e.target)}
+        onChange={(e) => autoResize(e.target)}
         onBlur={handleBlur}
       />
       <div className="flex flex-wrap gap-2 mt-2">
@@ -140,6 +170,13 @@ export default function TestCasesPage() {
   const [hideCompleted, setHideCompleted] = useState(false)
 
   useEffect(() => { load() }, [productId, suiteId])
+
+  // 탭 포커스 시 자동 갱신
+  useEffect(() => {
+    function onFocus() { load() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [productId, suiteId])
 
   // ESC 키로 라이트박스 닫기
   useEffect(() => {
@@ -412,6 +449,10 @@ export default function TestCasesPage() {
             <h1 className="text-lg font-bold text-slate-800">{suite?.name ?? '...'}</h1>
             {suite?.version && <Badge variant="outline">{suite.version}</Badge>}
           </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={load} className="text-slate-400 hover:text-slate-600" title="새로고침">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             {isAdmin && (
               <DialogTrigger asChild>
@@ -430,6 +471,7 @@ export default function TestCasesPage() {
               />
             )}
           </Dialog>
+          </div>
         </div>
       </header>
 
