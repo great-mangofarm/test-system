@@ -690,7 +690,7 @@ export default function TestCasesPage() {
 
                           // 읽기 전용 텍스트 박스
                           const ReadBox = ({ value }: { value: string }) => (
-                            <div className="bg-white rounded-md border px-3 py-2 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed min-h-[60px]">
+                            <div className="bg-slate-50 rounded-md border border-slate-100 px-3 py-2 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed min-h-[60px] cursor-default">
                               {value || <span className="text-slate-300">—</span>}
                             </div>
                           )
@@ -885,12 +885,30 @@ export default function TestCasesPage() {
                                 )}
 
                                 {/* 테스트 결과 피드백 */}
-                                {canEditStatus && (
-                                  <ResultFeedback
-                                    tc={tc}
-                                    onLightbox={setLightbox}
-                                    onUpdate={(patch) => setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, ...patch } : c))}
-                                  />
+                                {(canEditStatus || tc.resultNote || (tc.resultImages ?? []).length > 0) && (
+                                  canEditStatus ? (
+                                    <ResultFeedback
+                                      tc={tc}
+                                      onLightbox={setLightbox}
+                                      onUpdate={(patch) => setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, ...patch } : c))}
+                                    />
+                                  ) : (
+                                    <div>
+                                      <p className="text-xs text-amber-500 font-medium mb-1">테스트 결과 피드백</p>
+                                      <div className="bg-slate-50 rounded-md border border-slate-100 px-3 py-2 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed min-h-[60px]">
+                                        {tc.resultNote || <span className="text-slate-300">—</span>}
+                                      </div>
+                                      {(tc.resultImages ?? []).length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                          {(tc.resultImages ?? []).map((url) => (
+                                            <img key={url} src={url}
+                                              className="w-20 h-20 object-cover rounded border cursor-pointer hover:opacity-80"
+                                              onClick={() => setLightbox(url)} alt="" />
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
                                 )}
                               </div>
                             </div>
