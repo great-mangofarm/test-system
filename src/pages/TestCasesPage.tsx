@@ -282,6 +282,7 @@ export default function TestCasesPage() {
   async function quickUpdateProcessing(id: string, status: ProcessingStatus) {
     await updateTestCase(id, { processingStatus: status })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, processingStatus: status } : c))
+    if (inlineEditId === id) setInlineForm((f) => ({ ...f, processingStatus: status }))
   }
 
   async function saveNote(id: string) {
@@ -308,11 +309,13 @@ export default function TestCasesPage() {
   async function quickUpdateStatus(id: string, status: TestStatus) {
     await updateTestCase(id, { status })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, status } : c))
+    if (inlineEditId === id) setInlineForm((f) => ({ ...f, status }))
   }
 
   async function quickUpdateAssignedDeveloper(id: string, assignedDeveloper: string) {
     await updateTestCase(id, { assignedDeveloper })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, assignedDeveloper } : c))
+    if (inlineEditId === id) setInlineForm((f) => ({ ...f, assignedDeveloper }))
   }
 
   const passRate = stats.total > 0 ? Math.round((stats.pass / stats.total) * 100) : 0
