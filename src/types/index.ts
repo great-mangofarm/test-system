@@ -20,6 +20,7 @@ export interface Product {
   name: string
   description: string
   jiraProjectKey: string
+  areas: string[]
   order: number
   createdAt: string
 }

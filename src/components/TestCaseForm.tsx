@@ -20,6 +20,7 @@ interface Props {
   suiteId: string
   initial?: Partial<FormData>
   users?: UserProfile[]
+  areas?: string[]
   jiraProjectKey?: string
   currentUserDisplayName?: string
   onSave: (data: FormData, jiraFields: JiraFields) => Promise<void>
@@ -55,7 +56,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, currentUserDisplayName, onSave, onCancel }: Props) {
+export function TestCaseForm({ suiteId, initial, users = [], areas, jiraProjectKey, currentUserDisplayName, onSave, onCancel }: Props) {
   const [form, setForm] = useState<FormData>({
     ...defaultForm,
     ...initial,
@@ -150,11 +151,21 @@ export function TestCaseForm({ suiteId, initial, users = [], jiraProjectKey, cur
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label>영역 / 기능</Label>
-              <Input
-                placeholder="예: 로그인, 결제"
-                value={form.area}
-                onChange={(e) => set('area', e.target.value)}
-              />
+              {areas && areas.length > 0 ? (
+                <Select value={form.area || '__none__'} onValueChange={(v) => set('area', v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    {areas.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder="예: 로그인, 결제"
+                  value={form.area}
+                  onChange={(e) => set('area', e.target.value)}
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>우선순위</Label>

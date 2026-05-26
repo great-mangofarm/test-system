@@ -32,7 +32,7 @@ import { useAuth, logout, deleteAccount } from '@/store/auth'
 import type { Product, TestSuite, SuiteType } from '@/types'
 import {
   Plus, Package, ClipboardList, ArrowRight, Pencil, Trash2,
-  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench,
+  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -282,7 +282,8 @@ export default function HomePage() {
   const [loadingSuites, setLoadingSuites] = useState(false)
 
   const [productDialog, setProductDialog] = useState<ProductDialog | null>(null)
-  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '' })
+  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '', areas: [] as string[] })
+  const [areaInput, setAreaInput] = useState('')
   const [productSaving, setProductSaving] = useState(false)
   const [deleteProduct_, setDeleteProduct_] = useState<Product | null>(null)
 
@@ -349,12 +350,25 @@ export default function HomePage() {
 
   // Product CRUD
   function openProductCreate() {
-    setProductForm({ name: '', description: '', jiraProjectKey: '' })
+    setProductForm({ name: '', description: '', jiraProjectKey: '', areas: [] })
+    setAreaInput('')
     setProductDialog({ mode: 'create' })
   }
   function openProductEdit(p: Product) {
-    setProductForm({ name: p.name, description: p.description, jiraProjectKey: p.jiraProjectKey ?? '' })
+    setProductForm({ name: p.name, description: p.description, jiraProjectKey: p.jiraProjectKey ?? '', areas: p.areas ?? [] })
+    setAreaInput('')
     setProductDialog({ mode: 'edit', target: p })
+  }
+
+  function addArea() {
+    const trimmed = areaInput.trim()
+    if (!trimmed || productForm.areas.includes(trimmed)) return
+    setProductForm((f) => ({ ...f, areas: [...f.areas, trimmed] }))
+    setAreaInput('')
+  }
+
+  function removeArea(area: string) {
+    setProductForm((f) => ({ ...f, areas: f.areas.filter((a) => a !== area) }))
   }
   async function handleProductSave() {
     if (!productForm.name.trim()) return
@@ -563,7 +577,7 @@ export default function HomePage() {
 
       {/* Product Dialog */}
       <Dialog open={!!productDialog} onOpenChange={(o) => !o && setProductDialog(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{productDialog?.mode === 'edit' ? '프로덕트 수정' : '새 프로덕트'}</DialogTitle>
           </DialogHeader>
@@ -582,6 +596,34 @@ export default function HomePage() {
               <Label>Jira 프로젝트 키 <span className="text-xs text-slate-400 font-normal">— 티켓 자동 생성 연동</span></Label>
               <Input placeholder="예: EPC, ADMIN" value={productForm.jiraProjectKey}
                 onChange={(e) => setProductForm((f) => ({ ...f, jiraProjectKey: e.target.value.toUpperCase() }))} />
+            </div>
+
+            {/* 영역 관리 */}
+            <div className="space-y-2">
+              <Label>테스트 영역 <span className="text-xs text-slate-400 font-normal">— 없으면 자유 입력</span></Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="영역명 입력 후 Enter"
+                  value={areaInput}
+                  onChange={(e) => setAreaInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addArea() } }}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={addArea} disabled={!areaInput.trim()}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              {productForm.areas.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {productForm.areas.map((area) => (
+                    <span key={area} className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-xs rounded-full">
+                      {area}
+                      <button type="button" onClick={() => removeArea(area)} className="text-slate-400 hover:text-red-500">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

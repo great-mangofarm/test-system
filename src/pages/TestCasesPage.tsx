@@ -464,6 +464,7 @@ export default function TestCasesPage() {
                 suiteId={suiteId!}
                 initial={editTarget ?? undefined}
                 users={users}
+                areas={product?.areas ?? []}
                 jiraProjectKey={editTarget ? undefined : product?.jiraProjectKey}
                 currentUserDisplayName={user?.displayName}
                 onSave={handleSave}
