@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -241,29 +241,30 @@ function SortableSuite({
 
       {/* 영역별 진행도 */}
       {s && s.areas.length > 0 && (
-        <div className="mt-4 border-t pt-3 space-y-2">
+        <div className="mt-3 border-t pt-3">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">영역별 진행도</p>
-          {s.areas.map((area) => {
-            const pct = Math.round((area.pass / area.total) * 100)
-            return (
-              <div key={area.name}>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs text-slate-600 truncate max-w-[60%]">{area.name}</span>
-                  <span className="text-xs text-slate-400 shrink-0">
-                    {area.pass}/{area.total}
-                    {area.fail > 0 && <span className="text-red-400 ml-1">실패 {area.fail}</span>}
-                    {area.blocked > 0 && <span className="text-orange-400 ml-1">블로킹 {area.blocked}</span>}
-                  </span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+            {s.areas.map((area) => {
+              const pct = area.total > 0 ? Math.round((area.pass / area.total) * 100) : 0
+              return (
+                <div key={area.name}>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-xs text-slate-600 truncate max-w-[55%]">{area.name}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-1">
+                      <span className="font-medium text-slate-600">{pct}%</span>
+                      {area.fail > 0 && <span className="text-red-400">·{area.fail}실패</span>}
+                      {area.blocked > 0 && <span className="text-orange-400">·{area.blocked}블</span>}
+                    </span>
+                  </div>
+                  <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
+                    {area.pass > 0 && <div className="bg-green-500" style={{ width: `${(area.pass / area.total) * 100}%` }} />}
+                    {area.fail > 0 && <div className="bg-red-400" style={{ width: `${(area.fail / area.total) * 100}%` }} />}
+                    {area.blocked > 0 && <div className="bg-orange-400" style={{ width: `${(area.blocked / area.total) * 100}%` }} />}
+                  </div>
                 </div>
-                <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100 gap-px">
-                  {area.pass > 0 && <div className="bg-green-500 rounded-full" style={{ width: `${(area.pass / area.total) * 100}%` }} />}
-                  {area.fail > 0 && <div className="bg-red-400" style={{ width: `${(area.fail / area.total) * 100}%` }} />}
-                  {area.blocked > 0 && <div className="bg-orange-400" style={{ width: `${(area.blocked / area.total) * 100}%` }} />}
-                </div>
-                <p className="text-right text-[10px] text-slate-400 mt-0.5">{pct}%</p>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -284,6 +285,7 @@ export default function HomePage() {
   const [productDialog, setProductDialog] = useState<ProductDialog | null>(null)
   const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '', areas: [] as string[] })
   const [areaInput, setAreaInput] = useState('')
+  const areaComposing = useRef(false)
   const [productSaving, setProductSaving] = useState(false)
   const [deleteProduct_, setDeleteProduct_] = useState<Product | null>(null)
 
@@ -606,7 +608,9 @@ export default function HomePage() {
                   placeholder="영역명 입력 후 Enter"
                   value={areaInput}
                   onChange={(e) => setAreaInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addArea() } }}
+                  onCompositionStart={() => { areaComposing.current = true }}
+                  onCompositionEnd={() => { areaComposing.current = false }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !areaComposing.current) { e.preventDefault(); addArea() } }}
                 />
                 <Button type="button" variant="outline" size="sm" onClick={addArea} disabled={!areaInput.trim()}>
                   <Plus className="w-4 h-4" />
