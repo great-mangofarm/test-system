@@ -167,7 +167,7 @@ export default function TestCasesPage() {
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [hideCompleted, setHideCompleted] = useState(false)
+  const [hideCompleted, setHideCompleted] = useState(true)
 
   useEffect(() => { load() }, [productId, suiteId])
 
