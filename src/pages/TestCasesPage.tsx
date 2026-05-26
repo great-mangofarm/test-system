@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TestCaseForm } from '@/components/TestCaseForm'
 import type { JiraFields } from '@/components/TestCaseForm'
+import { Checkbox } from '@/components/ui/checkbox'
 import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
@@ -561,12 +562,7 @@ export default function TestCasesPage() {
           )}
         </div>
         <label className="flex items-center gap-1.5 ml-auto cursor-pointer select-none text-xs text-slate-500 hover:text-slate-700">
-          <input
-            type="checkbox"
-            checked={hideCompleted}
-            onChange={(e) => setHideCompleted(e.target.checked)}
-            className="w-3.5 h-3.5 accent-primary"
-          />
+          <Checkbox checked={hideCompleted} onChange={setHideCompleted} />
           완료 이슈 숨기기
         </label>
         <span className="text-xs text-slate-400">{filtered.length}건</span>
@@ -978,12 +974,7 @@ export default function TestCasesPage() {
           </AlertDialogHeader>
           {deleteTarget?.ticketLink && extractJiraKey(deleteTarget.ticketLink) && (
             <label className="flex items-center gap-2 px-1 py-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={deleteJiraToo}
-                onChange={(e) => setDeleteJiraToo(e.target.checked)}
-                className="w-4 h-4 accent-destructive"
-              />
+              <Checkbox checked={deleteJiraToo} onChange={setDeleteJiraToo} color="destructive" />
               <span className="text-sm text-slate-700">
                 Jira 티켓 <span className="font-mono text-xs text-slate-500">{extractJiraKey(deleteTarget.ticketLink!)}</span>도 함께 삭제
               </span>
