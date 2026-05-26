@@ -98,6 +98,30 @@ export async function bulkCreateTestCases(cases: Omit<TestCase, 'id'>[]): Promis
   await Promise.all(cases.map((c) => addDoc(collection(db, 'testcases'), c)))
 }
 
+export interface SuiteStats {
+  total: number
+  pass: number
+  fail: number
+  blocked: number
+  notTested: number
+  resolved: number
+}
+
+export async function getSuiteStats(suiteId: string): Promise<SuiteStats> {
+  const snap = await getDocs(
+    query(collection(db, 'testcases'), where('suiteId', '==', suiteId))
+  )
+  const docs = snap.docs.map((d) => d.data() as TestCase)
+  return {
+    total: docs.length,
+    pass: docs.filter((c) => c.status === 'pass').length,
+    fail: docs.filter((c) => c.status === 'fail').length,
+    blocked: docs.filter((c) => c.status === 'blocked').length,
+    notTested: docs.filter((c) => c.status === 'not_tested').length,
+    resolved: docs.filter((c) => c.processingStatus === 'resolved').length,
+  }
+}
+
 // --- Image Upload (Cloudinary) ---
 const CLOUDINARY_CLOUD_NAME = 'drz0oj86f'
 const CLOUDINARY_UPLOAD_PRESET = 'issue_tracker'

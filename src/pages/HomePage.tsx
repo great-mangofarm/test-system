@@ -25,7 +25,8 @@ import {
 import { ChangePasswordModal } from '@/components/ChangePasswordModal'
 import {
   getProducts, createProduct, updateProduct, deleteProduct, reorderProducts,
-  getSuites, createSuite, updateSuite, deleteSuite, reorderSuites,
+  getSuites, createSuite, updateSuite, deleteSuite, reorderSuites, getSuiteStats,
+  type SuiteStats,
 } from '@/lib/firestore'
 import { useAuth, logout, deleteAccount } from '@/store/auth'
 import type { Product, TestSuite, SuiteType } from '@/types'
@@ -40,6 +41,55 @@ const SUITE_TYPE_LABELS: Record<SuiteType, string> = { qa: '테스트케이스',
 const SUITE_TYPE_COLORS: Record<SuiteType, string> = {
   qa: 'bg-blue-50 text-blue-600 border-blue-100',
   dev: 'bg-orange-50 text-orange-600 border-orange-100',
+}
+
+function DonutChart({ stats }: { stats: SuiteStats }) {
+  const { pass, fail, blocked, notTested, total } = stats
+  if (total === 0) {
+    return (
+      <svg width="56" height="56" viewBox="0 0 56 56">
+        <circle cx="28" cy="28" r="20" fill="none" stroke="#e2e8f0" strokeWidth="7" />
+        <text x="28" y="32" textAnchor="middle" fontSize="10" fill="#94a3b8">0</text>
+      </svg>
+    )
+  }
+
+  const r = 20
+  const cx = 28, cy = 28
+  const circ = 2 * Math.PI * r
+  const segments = [
+    { value: pass, color: '#22c55e' },
+    { value: fail, color: '#ef4444' },
+    { value: blocked, color: '#f97316' },
+    { value: notTested, color: '#e2e8f0' },
+  ]
+
+  let cumulative = 0
+  const passRate = Math.round((pass / total) * 100)
+
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56">
+      {segments.map((seg, i) => {
+        const dash = (seg.value / total) * circ
+        const offset = -(cumulative / total) * circ
+        cumulative += seg.value
+        return (
+          <circle
+            key={i}
+            r={r} cx={cx} cy={cy}
+            fill="none"
+            stroke={seg.color}
+            strokeWidth="7"
+            strokeDasharray={`${dash} ${circ - dash}`}
+            strokeDashoffset={offset}
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        )
+      })}
+      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="9" fontWeight="600" fill="#475569">{passRate}%</text>
+      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="7" fill="#94a3b8">통과율</text>
+    </svg>
+  )
 }
 
 type ProductDialog = { mode: 'create' | 'edit'; target?: Product }
@@ -98,9 +148,10 @@ function SortableProduct({
 
 // Sortable suite item
 function SortableSuite({
-  suite, isAdmin, onOpen, onEdit, onDelete,
+  suite, stats, isAdmin, onOpen, onEdit, onDelete,
 }: {
   suite: TestSuite
+  stats?: SuiteStats
   isAdmin: boolean
   onOpen: () => void
   onEdit: () => void
@@ -109,56 +160,88 @@ function SortableSuite({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: suite.id, disabled: !isAdmin })
 
+  const s = stats
+
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'group bg-white border rounded-lg px-4 py-3 flex items-center justify-between hover:shadow-sm transition-shadow cursor-pointer',
+        'group bg-white border rounded-xl px-4 py-4 hover:shadow-md transition-shadow cursor-pointer',
         isDragging && 'opacity-50 shadow-lg'
       )}
       onClick={onOpen}
     >
-      <div className="flex items-center gap-3">
-        {isAdmin && (
-          <span
-            {...attributes}
-            {...listeners}
-            className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="w-4 h-4" />
-          </span>
-        )}
-        {suite.type === 'dev'
-          ? <Wrench className="w-4 h-4 text-orange-500 shrink-0" />
-          : <ClipboardList className="w-4 h-4 text-primary shrink-0" />
-        }
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-slate-800">{suite.name}</p>
-            <span className={cn('text-xs px-1.5 py-0.5 rounded border font-medium', SUITE_TYPE_COLORS[suite.type ?? 'qa'])}>
-              {SUITE_TYPE_LABELS[suite.type ?? 'qa']}
+      {/* 상단: 제목 + 차트 */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 min-w-0">
+          {isAdmin && (
+            <span
+              {...attributes}
+              {...listeners}
+              className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing mt-0.5 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="w-4 h-4" />
             </span>
+          )}
+          {suite.type === 'dev'
+            ? <Wrench className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+            : <ClipboardList className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+          }
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-slate-800">{suite.name}</p>
+              <span className={cn('text-xs px-1.5 py-0.5 rounded border font-medium', SUITE_TYPE_COLORS[suite.type ?? 'qa'])}>
+                {SUITE_TYPE_LABELS[suite.type ?? 'qa']}
+              </span>
+              {suite.version && <span className="text-xs text-slate-400">{suite.version}</span>}
+            </div>
+            {s && s.total > 0 && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                처리완료 <span className="font-medium text-slate-600">{s.resolved}</span> / 전체 <span className="font-medium text-slate-600">{s.total}</span>
+              </p>
+            )}
+            {s && s.total === 0 && (
+              <p className="text-xs text-slate-300 mt-0.5">항목 없음</p>
+            )}
           </div>
-          {suite.version && <p className="text-xs text-slate-400">{suite.version}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+              <button className="p-1.5 rounded hover:bg-slate-100 text-slate-500"
+                onClick={(e) => { e.stopPropagation(); onEdit() }}>
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button className="p-1.5 rounded hover:bg-red-50 text-destructive"
+                onClick={(e) => { e.stopPropagation(); onDelete() }}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {s ? <DonutChart stats={s} /> : <div className="w-14 h-14 rounded-full border-4 border-slate-100 animate-pulse" />}
+          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
         </div>
       </div>
-      <div className="flex items-center gap-1">
-        {isAdmin && (
-          <>
-            <button className="p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-100 text-slate-500"
-              onClick={(e) => { e.stopPropagation(); onEdit() }}>
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button className="p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete() }}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </>
-        )}
-        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
-      </div>
+
+      {/* 하단: 상태 바 */}
+      {s && s.total > 0 && (
+        <div className="mt-3">
+          <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
+            {s.pass > 0 && <div className="bg-green-500" style={{ flex: s.pass }} />}
+            {s.fail > 0 && <div className="bg-red-400" style={{ flex: s.fail }} />}
+            {s.blocked > 0 && <div className="bg-orange-400" style={{ flex: s.blocked }} />}
+            {s.notTested > 0 && <div className="bg-slate-200" style={{ flex: s.notTested }} />}
+          </div>
+          <div className="flex gap-3 mt-1.5 text-xs text-slate-500">
+            {s.pass > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />통과 {s.pass}</span>}
+            {s.fail > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />실패 {s.fail}</span>}
+            {s.blocked > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />블로킹 {s.blocked}</span>}
+            {s.notTested > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />미테스트 {s.notTested}</span>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -178,6 +261,8 @@ export default function HomePage() {
   const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '' })
   const [productSaving, setProductSaving] = useState(false)
   const [deleteProduct_, setDeleteProduct_] = useState<Product | null>(null)
+
+  const [suiteStats, setSuiteStats] = useState<Record<string, SuiteStats>>({})
 
   const [suiteDialog, setSuiteDialog] = useState<SuiteDialog | null>(null)
   const [suiteForm, setSuiteForm] = useState({ name: '', version: '', type: 'qa' as SuiteType })
@@ -206,8 +291,15 @@ export default function HomePage() {
 
   async function loadSuites(productId: string) {
     setLoadingSuites(true)
-    try { setSuites(await getSuites(productId)) }
-    finally { setLoadingSuites(false) }
+    try {
+      const list = await getSuites(productId)
+      setSuites(list)
+      // 각 suite의 stats 병렬 로드
+      const statsEntries = await Promise.all(
+        list.map(async (s) => [s.id, await getSuiteStats(s.id)] as const)
+      )
+      setSuiteStats(Object.fromEntries(statsEntries))
+    } finally { setLoadingSuites(false) }
   }
 
   // DnD
@@ -423,22 +515,23 @@ export default function HomePage() {
                 {isAdmin && <Button className="mt-3" size="sm" onClick={openSuiteCreate}><Plus /> 묶음 추가</Button>}
               </div>
             ) : (
-              <div className="space-y-2 max-w-2xl">
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSuiteDragEnd}>
-                  <SortableContext items={suites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSuiteDragEnd}>
+                <SortableContext items={suites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
                     {suites.map((s) => (
                       <SortableSuite
                         key={s.id}
                         suite={s}
+                        stats={suiteStats[s.id]}
                         isAdmin={isAdmin}
                         onOpen={() => navigate(`/products/${selectedProduct.id}/suites/${s.id}`)}
                         onEdit={() => openSuiteEdit(s)}
                         onDelete={() => setDeleteSuite_(s)}
                       />
                     ))}
-                  </SortableContext>
-                </DndContext>
-              </div>
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         </main>
