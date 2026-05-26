@@ -557,7 +557,7 @@ export default function HomePage() {
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSuiteDragEnd}>
                 <SortableContext items={suites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     {suites.map((s) => (
                       <SortableSuite
                         key={s.id}
