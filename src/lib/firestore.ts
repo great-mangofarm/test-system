@@ -98,6 +98,14 @@ export async function bulkCreateTestCases(cases: Omit<TestCase, 'id'>[]): Promis
   await Promise.all(cases.map((c) => addDoc(collection(db, 'testcases'), c)))
 }
 
+export interface AreaStat {
+  total: number
+  pass: number
+  fail: number
+  blocked: number
+  notTested: number
+}
+
 export interface SuiteStats {
   total: number
   pass: number
@@ -105,6 +113,7 @@ export interface SuiteStats {
   blocked: number
   notTested: number
   resolved: number
+  areas: Array<{ name: string } & AreaStat>
 }
 
 export async function getSuiteStats(suiteId: string): Promise<SuiteStats> {
@@ -112,6 +121,20 @@ export async function getSuiteStats(suiteId: string): Promise<SuiteStats> {
     query(collection(db, 'testcases'), where('suiteId', '==', suiteId))
   )
   const docs = snap.docs.map((d) => d.data() as TestCase)
+
+  // 영역별 집계
+  const areaMap = new Map<string, AreaStat>()
+  for (const c of docs) {
+    const key = c.area || '(미분류)'
+    if (!areaMap.has(key)) areaMap.set(key, { total: 0, pass: 0, fail: 0, blocked: 0, notTested: 0 })
+    const a = areaMap.get(key)!
+    a.total++
+    if (c.status === 'pass') a.pass++
+    else if (c.status === 'fail') a.fail++
+    else if (c.status === 'blocked') a.blocked++
+    else a.notTested++
+  }
+
   return {
     total: docs.length,
     pass: docs.filter((c) => c.status === 'pass').length,
@@ -119,6 +142,7 @@ export async function getSuiteStats(suiteId: string): Promise<SuiteStats> {
     blocked: docs.filter((c) => c.status === 'blocked').length,
     notTested: docs.filter((c) => c.status === 'not_tested').length,
     resolved: docs.filter((c) => c.processingStatus === 'resolved').length,
+    areas: Array.from(areaMap.entries()).map(([name, stat]) => ({ name, ...stat })),
   }
 }
 

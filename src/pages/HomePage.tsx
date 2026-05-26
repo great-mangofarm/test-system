@@ -45,18 +45,21 @@ const SUITE_TYPE_COLORS: Record<SuiteType, string> = {
 
 function DonutChart({ stats }: { stats: SuiteStats }) {
   const { pass, fail, blocked, notTested, total } = stats
+  const size = 88
+  const cx = size / 2, cy = size / 2
+  const r = 34
+  const circ = 2 * Math.PI * r
+  const passRate = total > 0 ? Math.round((pass / total) * 100) : 0
+
   if (total === 0) {
     return (
-      <svg width="56" height="56" viewBox="0 0 56 56">
-        <circle cx="28" cy="28" r="20" fill="none" stroke="#e2e8f0" strokeWidth="7" />
-        <text x="28" y="32" textAnchor="middle" fontSize="10" fill="#94a3b8">0</text>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth="10" />
+        <text x={cx} y={cy + 5} textAnchor="middle" fontSize="13" fill="#94a3b8">—</text>
       </svg>
     )
   }
 
-  const r = 20
-  const cx = 28, cy = 28
-  const circ = 2 * Math.PI * r
   const segments = [
     { value: pass, color: '#22c55e' },
     { value: fail, color: '#ef4444' },
@@ -65,29 +68,28 @@ function DonutChart({ stats }: { stats: SuiteStats }) {
   ]
 
   let cumulative = 0
-  const passRate = Math.round((pass / total) * 100)
-
   return (
-    <svg width="56" height="56" viewBox="0 0 56 56">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       {segments.map((seg, i) => {
         const dash = (seg.value / total) * circ
         const offset = -(cumulative / total) * circ
         cumulative += seg.value
+        if (seg.value === 0) return null
         return (
           <circle
             key={i}
             r={r} cx={cx} cy={cy}
             fill="none"
             stroke={seg.color}
-            strokeWidth="7"
+            strokeWidth="10"
             strokeDasharray={`${dash} ${circ - dash}`}
             strokeDashoffset={offset}
             transform={`rotate(-90 ${cx} ${cy})`}
           />
         )
       })}
-      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="9" fontWeight="600" fill="#475569">{passRate}%</text>
-      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="7" fill="#94a3b8">통과율</text>
+      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="15" fontWeight="700" fill="#334155">{passRate}%</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">통과율</text>
     </svg>
   )
 }
@@ -172,45 +174,57 @@ function SortableSuite({
       )}
       onClick={onOpen}
     >
-      {/* 상단: 제목 + 차트 */}
+      {/* 상단: 제목 + 도넛 차트 */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2 min-w-0">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
           {isAdmin && (
             <span
               {...attributes}
               {...listeners}
-              className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing mt-0.5 shrink-0"
+              className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing mt-1 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               <GripVertical className="w-4 h-4" />
             </span>
           )}
           {suite.type === 'dev'
-            ? <Wrench className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-            : <ClipboardList className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            ? <Wrench className="w-4 h-4 text-orange-500 shrink-0 mt-1" />
+            : <ClipboardList className="w-4 h-4 text-primary shrink-0 mt-1" />
           }
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-semibold text-slate-800">{suite.name}</p>
+              <p className="font-semibold text-slate-800">{suite.name}</p>
               <span className={cn('text-xs px-1.5 py-0.5 rounded border font-medium', SUITE_TYPE_COLORS[suite.type ?? 'qa'])}>
                 {SUITE_TYPE_LABELS[suite.type ?? 'qa']}
               </span>
               {suite.version && <span className="text-xs text-slate-400">{suite.version}</span>}
             </div>
             {s && s.total > 0 && (
-              <p className="text-xs text-slate-400 mt-0.5">
-                처리완료 <span className="font-medium text-slate-600">{s.resolved}</span> / 전체 <span className="font-medium text-slate-600">{s.total}</span>
+              <p className="text-xs text-slate-400 mt-1">
+                처리완료 <span className="font-semibold text-slate-600">{s.resolved}</span> / 전체 <span className="font-semibold text-slate-600">{s.total}</span>
+                <span className="mx-1.5 text-slate-200">|</span>
+                통과 <span className="font-semibold text-green-600">{s.pass}</span>
+                {s.fail > 0 && <> · 실패 <span className="font-semibold text-red-500">{s.fail}</span></>}
+                {s.blocked > 0 && <> · 블로킹 <span className="font-semibold text-orange-500">{s.blocked}</span></>}
               </p>
             )}
-            {s && s.total === 0 && (
-              <p className="text-xs text-slate-300 mt-0.5">항목 없음</p>
+            {s && s.total === 0 && <p className="text-xs text-slate-300 mt-1">항목 없음</p>}
+
+            {/* 전체 상태 바 */}
+            {s && s.total > 0 && (
+              <div className="flex h-1.5 rounded-full overflow-hidden mt-2 gap-px">
+                {s.pass > 0 && <div className="bg-green-500" style={{ flex: s.pass }} />}
+                {s.fail > 0 && <div className="bg-red-400" style={{ flex: s.fail }} />}
+                {s.blocked > 0 && <div className="bg-orange-400" style={{ flex: s.blocked }} />}
+                {s.notTested > 0 && <div className="bg-slate-200" style={{ flex: s.notTested }} />}
+              </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {isAdmin && (
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
-              <button className="p-1.5 rounded hover:bg-slate-100 text-slate-500"
+              <button className="p-1.5 rounded hover:bg-slate-100 text-slate-400"
                 onClick={(e) => { e.stopPropagation(); onEdit() }}>
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -220,26 +234,36 @@ function SortableSuite({
               </button>
             </div>
           )}
-          {s ? <DonutChart stats={s} /> : <div className="w-14 h-14 rounded-full border-4 border-slate-100 animate-pulse" />}
+          {s ? <DonutChart stats={s} /> : <div className="w-[88px] h-[88px] rounded-full border-[10px] border-slate-100 animate-pulse" />}
           <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
         </div>
       </div>
 
-      {/* 하단: 상태 바 */}
-      {s && s.total > 0 && (
-        <div className="mt-3">
-          <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
-            {s.pass > 0 && <div className="bg-green-500" style={{ flex: s.pass }} />}
-            {s.fail > 0 && <div className="bg-red-400" style={{ flex: s.fail }} />}
-            {s.blocked > 0 && <div className="bg-orange-400" style={{ flex: s.blocked }} />}
-            {s.notTested > 0 && <div className="bg-slate-200" style={{ flex: s.notTested }} />}
-          </div>
-          <div className="flex gap-3 mt-1.5 text-xs text-slate-500">
-            {s.pass > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />통과 {s.pass}</span>}
-            {s.fail > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />실패 {s.fail}</span>}
-            {s.blocked > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />블로킹 {s.blocked}</span>}
-            {s.notTested > 0 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />미테스트 {s.notTested}</span>}
-          </div>
+      {/* 영역별 진행도 */}
+      {s && s.areas.length > 0 && (
+        <div className="mt-4 border-t pt-3 space-y-2">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">영역별 진행도</p>
+          {s.areas.map((area) => {
+            const pct = Math.round((area.pass / area.total) * 100)
+            return (
+              <div key={area.name}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-xs text-slate-600 truncate max-w-[60%]">{area.name}</span>
+                  <span className="text-xs text-slate-400 shrink-0">
+                    {area.pass}/{area.total}
+                    {area.fail > 0 && <span className="text-red-400 ml-1">실패 {area.fail}</span>}
+                    {area.blocked > 0 && <span className="text-orange-400 ml-1">블로킹 {area.blocked}</span>}
+                  </span>
+                </div>
+                <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100 gap-px">
+                  {area.pass > 0 && <div className="bg-green-500 rounded-full" style={{ width: `${(area.pass / area.total) * 100}%` }} />}
+                  {area.fail > 0 && <div className="bg-red-400" style={{ width: `${(area.fail / area.total) * 100}%` }} />}
+                  {area.blocked > 0 && <div className="bg-orange-400" style={{ width: `${(area.blocked / area.total) * 100}%` }} />}
+                </div>
+                <p className="text-right text-[10px] text-slate-400 mt-0.5">{pct}%</p>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
