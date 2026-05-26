@@ -243,7 +243,7 @@ function SortableSuite({
       {s && s.areas.length > 0 && (
         <div className="mt-3 border-t pt-3">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">영역별 진행도</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2.5">
             {s.areas.map((area) => {
               const pct = area.total > 0 ? Math.round((area.pass / area.total) * 100) : 0
               return (
