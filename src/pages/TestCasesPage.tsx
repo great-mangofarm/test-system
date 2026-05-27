@@ -179,8 +179,6 @@ export default function TestCasesPage() {
   const [deleteJiraToo, setDeleteJiraToo] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<string | null>(null)
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
-  const [noteValue, setNoteValue] = useState('')
   // 인라인 편집 (관리자)
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
   const [inlineForm, setInlineForm] = useState<Partial<TestCase>>({})
@@ -427,12 +425,6 @@ export default function TestCasesPage() {
     if (inlineEditId === id) setInlineForm((f) => ({ ...f, processingStatus: status }))
   }
 
-  async function saveNote(id: string) {
-    const original = cases.find((c) => c.id === id)?.developerNote ?? ''
-    if (noteValue === original) return
-    await updateTestCase(id, { developerNote: noteValue })
-    setCases((prev) => prev.map((c) => c.id === id ? { ...c, developerNote: noteValue } : c))
-  }
 
   function startInlineEdit(tc: TestCase) {
     setInlineEditId(tc.id)
