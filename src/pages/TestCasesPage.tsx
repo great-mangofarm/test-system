@@ -132,6 +132,31 @@ function ResultFeedback({
   )
 }
 
+// 인라인 편집용 자동 높이 textarea — IIFE 밖에 정의해야 React가 동일 컴포넌트로 인식, 포커스 유지
+function InlineAutoArea({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (val: string) => void
+  placeholder?: string
+}) {
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+  return (
+    <textarea
+      ref={(el) => { if (el) autoResize(el) }}
+      className="w-full text-sm bg-white border rounded-md px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none overflow-hidden min-h-[60px]"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => { onChange(e.target.value); autoResize(e.target) }}
+    />
+  )
+}
+
 function formatDate(iso: string) {
   if (!iso) return '-'
   return iso.slice(0, 10)
@@ -734,17 +759,6 @@ export default function TestCasesPage() {
                             </div>
                           )
 
-                          // 자동 높이 textarea
-                          const AutoArea = ({ fieldKey, placeholder }: { fieldKey: keyof TestCase, placeholder?: string }) => (
-                            <textarea
-                              ref={ar}
-                              className="w-full text-sm bg-white border rounded-md px-3 py-2 leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none overflow-hidden min-h-[60px]"
-                              placeholder={placeholder}
-                              value={(f[fieldKey] as string) ?? ''}
-                              onChange={(e) => { setF(fieldKey, e.target.value); ar(e.target) }}
-                            />
-                          )
-
                           return (
                           <div className="space-y-3">
                             {/* 헤더 */}
@@ -875,36 +889,41 @@ export default function TestCasesPage() {
                                 <div>
                                   <p className="text-xs text-slate-400 mb-1">테스트 절차</p>
                                   {isEditing
-                                    ? <AutoArea fieldKey="steps" placeholder={"1. 앱 실행\n2. 버튼 클릭"} />
+                                    ? <InlineAutoArea value={(f.steps as string) ?? ''} onChange={(v) => setF('steps', v)} placeholder={"1. 앱 실행\n2. 버튼 클릭"} />
                                     : <ReadBox value={tc.steps} />}
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
                                     <p className="text-xs text-slate-400 mb-1">기대 결과</p>
                                     {isEditing
-                                      ? <AutoArea fieldKey="expectedResult" />
+                                      ? <InlineAutoArea value={(f.expectedResult as string) ?? ''} onChange={(v) => setF('expectedResult', v)} />
                                       : <ReadBox value={tc.expectedResult} />}
                                   </div>
                                   <div>
                                     <p className="text-xs text-slate-400 mb-1">실제 결과</p>
                                     {isEditing
-                                      ? <AutoArea fieldKey="actualResult" />
+                                      ? <InlineAutoArea value={(f.actualResult as string) ?? ''} onChange={(v) => setF('actualResult', v)} />
                                       : <ReadBox value={tc.actualResult} />}
                                   </div>
                                 </div>
                                 <div>
                                   <p className="text-xs text-blue-500 font-medium mb-1">개발자 코멘트</p>
                                   {isEditing ? (
-                                    <AutoArea fieldKey="developerNote" placeholder="처리 내용, 수정 사항 등" />
+                                    <InlineAutoArea value={(f.developerNote as string) ?? ''} onChange={(v) => setF('developerNote', v)} placeholder="처리 내용, 수정 사항 등" />
                                   ) : canEditStatus ? (
                                     <textarea
-                                      ref={ar}
                                       className="w-full text-sm text-slate-700 bg-white border rounded-md px-3 py-2 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px]"
                                       placeholder="코멘트를 입력하세요..."
-                                      value={editingNoteId === tc.id ? noteValue : tc.developerNote}
-                                      onFocus={(e) => { setEditingNoteId(tc.id); setNoteValue(tc.developerNote); ar(e.target) }}
-                                      onChange={(e) => { setNoteValue(e.target.value); ar(e.target) }}
-                                      onBlur={() => { if (editingNoteId === tc.id) saveNote(tc.id) }}
+                                      defaultValue={tc.developerNote}
+                                      onFocus={(e) => ar(e.target)}
+                                      onChange={(e) => ar(e.target)}
+                                      onBlur={async (e) => {
+                                        const newVal = e.target.value
+                                        if (newVal === (tc.developerNote ?? '')) return
+                                        await updateTestCase(tc.id, { developerNote: newVal })
+                                        setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, developerNote: newVal } : c))
+                                        toast({ title: '코멘트가 저장되었습니다' })
+                                      }}
                                     />
                                   ) : (
                                     <ReadBox value={tc.developerNote} />
