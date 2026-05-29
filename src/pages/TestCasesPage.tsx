@@ -445,15 +445,15 @@ export default function TestCasesPage() {
     setInlineForm({ ...merged })
     toast({ title: '변경사항이 저장되었습니다' })
 
-    // 담당자가 변경됐으면 Jira에도 반영
+    // 담당자가 변경됐으면 Jira에도 반영 (이메일 확인된 경우만)
     if (inlineForm.assignedDeveloper !== undefined && inlineForm.assignedDeveloper !== original.assignedDeveloper && original.ticketLink) {
       const issueKey = extractJiraKey(original.ticketLink)
-      if (issueKey) {
-        const dev = users.find((u) => u.displayName === inlineForm.assignedDeveloper)
+      const dev = users.find((u) => u.displayName === inlineForm.assignedDeveloper)
+      if (issueKey && dev?.email) {
         fetch('/api/jira-update-assignee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issueKey, developerEmail: dev?.email ?? '' }),
+          body: JSON.stringify({ issueKey, developerEmail: dev.email }),
         }).catch(() => {})
       }
     }
@@ -470,16 +470,16 @@ export default function TestCasesPage() {
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, assignedDeveloper } : c))
     if (inlineEditId === id) setInlineForm((f) => ({ ...f, assignedDeveloper }))
 
-    // Jira에도 반영
+    // Jira에도 반영 (이메일 확인된 경우만)
     const tc = cases.find((c) => c.id === id)
     if (tc?.ticketLink) {
       const issueKey = extractJiraKey(tc.ticketLink)
-      if (issueKey) {
-        const dev = users.find((u) => u.displayName === assignedDeveloper)
+      const dev = users.find((u) => u.displayName === assignedDeveloper)
+      if (issueKey && dev?.email) {
         fetch('/api/jira-update-assignee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issueKey, developerEmail: dev?.email ?? '' }),
+          body: JSON.stringify({ issueKey, developerEmail: dev.email }),
         }).catch(() => {})
       }
     }

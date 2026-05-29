@@ -27,6 +27,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const match = users.find((u: { emailAddress: string }) => u.emailAddress === developerEmail)
         if (match) accountId = match.accountId
       }
+      // 이메일로 Jira 계정을 못 찾으면 미정으로 만들지 않고 종료
+      if (!accountId) {
+        return res.status(200).json({ skipped: `no Jira account for ${developerEmail}` })
+      }
     }
 
     // Jira 담당자 업데이트 (accountId null = 담당자 제거)
