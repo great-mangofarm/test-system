@@ -202,6 +202,12 @@ export default function TestCasesPage() {
     return () => window.removeEventListener('focus', onFocus)
   }, [productId, suiteId])
 
+  // 30초마다 백그라운드 자동 갱신 (Jira 웹훅 동기화 반영)
+  useEffect(() => {
+    const timer = setInterval(() => { load() }, 30000)
+    return () => clearInterval(timer)
+  }, [productId, suiteId])
+
   // ESC 키로 라이트박스 닫기
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
