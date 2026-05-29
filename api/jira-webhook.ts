@@ -1,8 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { adminDb } from './lib/admin.js'
 
-const FIREBASE_PROJECT_ID = 'qa-test-274fa'
-const FIREBASE_API_KEY = process.env.VITE_FIREBASE_API_KEY!
-const JIRA_BASE_URL = process.env.JIRA_BASE_URL! // e.g. https://yourteam.atlassian.net
+const JIRA_BASE_URL = process.env.JIRA_BASE_URL!
 
 // Jira 상태명 → 우리 processingStatus 매핑
 const STATUS_MAP: Record<string, string> = {
@@ -17,102 +16,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = req.body
-    console.log('[webhook] received:', JSON.stringify(body?.changelog?.items))
 
     // 상태 변경 이벤트만 처리
     const statusChange = (body?.changelog?.items ?? []).find(
       (item: Record<string, string>) => item.field === 'status'
     )
     if (!statusChange) {
-      console.log('[webhook] skipped: no status change')
-      return res.status(200).json({ skipped: 'no status change in payload' })
+      return res.status(200).json({ skipped: 'no status change' })
     }
 
     const issueKey: string = body?.issue?.key
-    // Jira changelog item의 실제 키명은 "toString" (문자열 속성)
     const newJiraStatus: string = statusChange['toString']
-    console.log('[webhook] issueKey:', issueKey, '| newJiraStatus:', newJiraStatus)
+    console.log('[webhook] issueKey:', issueKey, '| status:', newJiraStatus)
 
     if (!issueKey || !newJiraStatus) {
-      return res.status(200).json({ skipped: 'missing issueKey or status' })
+      return res.status(200).json({ skipped: 'missing data' })
     }
 
     const newProcessingStatus = STATUS_MAP[newJiraStatus]
     if (!newProcessingStatus) {
-      console.log('[webhook] skipped: unmapped status:', newJiraStatus)
-      return res.status(200).json({ skipped: `unmapped jira status: ${newJiraStatus}` })
+      console.log('[webhook] skipped unmapped status:', newJiraStatus)
+      return res.status(200).json({ skipped: `unmapped: ${newJiraStatus}` })
     }
 
     // ticketLink로 Firestore 테스트케이스 조회
     const ticketLink = `${JIRA_BASE_URL}/browse/${issueKey}`
-    console.log('[webhook] searching ticketLink:', ticketLink)
+    const snap = await adminDb
+      .collection('testcases')
+      .where('ticketLink', '==', ticketLink)
+      .limit(1)
+      .get()
 
-    const queryUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`
+    if (snap.empty) {
+      console.log('[webhook] no testcase found for', ticketLink)
+      return res.status(200).json({ skipped: `no testcase for ${ticketLink}` })
+    }
 
-    const queryRes = await fetch(queryUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        structuredQuery: {
-          from: [{ collectionId: 'testcases' }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: 'ticketLink' },
-              op: 'EQUAL',
-              value: { stringValue: ticketLink },
-            },
-          },
-          limit: 1,
-        },
-      }),
+    await snap.docs[0].ref.update({
+      processingStatus: newProcessingStatus,
+      updatedAt: new Date().toISOString(),
     })
 
-    if (!queryRes.ok) {
-      const err = await queryRes.json()
-      console.log('[webhook] firestore query error:', JSON.stringify(err))
-      return res.status(500).json({ error: 'firestore query failed', detail: err })
-    }
-
-    const queryData = await queryRes.json()
-    console.log('[webhook] query result count:', queryData?.length, '| has doc:', !!queryData?.[0]?.document)
-
-    const doc = queryData?.[0]?.document
-    if (!doc) {
-      return res.status(200).json({ skipped: `no testcase found for ${ticketLink}` })
-    }
-
-    const docId = doc.name.split('/').pop()
-    console.log('[webhook] found docId:', docId, '| updating to:', newProcessingStatus)
-
-    // processingStatus 업데이트
-    const updateUrl = [
-      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}`,
-      `/databases/(default)/documents/testcases/${docId}`,
-      `?updateMask.fieldPaths=processingStatus&updateMask.fieldPaths=updatedAt`,
-      `&key=${FIREBASE_API_KEY}`,
-    ].join('')
-
-    const updateRes = await fetch(updateUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fields: {
-          processingStatus: { stringValue: newProcessingStatus },
-          updatedAt: { stringValue: new Date().toISOString() },
-        },
-      }),
-    })
-
-    if (!updateRes.ok) {
-      const err = await updateRes.json()
-      console.log('[webhook] firestore update error:', JSON.stringify(err))
-      return res.status(500).json({ error: 'firestore update failed', detail: err })
-    }
-
-    console.log('[webhook] success:', issueKey, '->', newProcessingStatus)
+    console.log('[webhook] updated', issueKey, '->', newProcessingStatus)
     return res.status(200).json({ ok: true, issueKey, newProcessingStatus })
   } catch (e) {
-    console.log('[webhook] exception:', String(e))
+    console.log('[webhook] error:', String(e))
     return res.status(500).json({ error: String(e) })
   }
 }
