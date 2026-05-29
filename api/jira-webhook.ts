@@ -57,10 +57,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updates.assignedDeveloper = ''
         console.log('[webhook] assignee removed')
       } else {
-        // accountId → 이메일 → 우리 유저 매핑
+        // assignable/search로 프로젝트 멤버 전체 조회 → accountId로 매칭 → 이메일로 우리 유저 찾기
         try {
+          const projectKey = issueKey.split('-')[0]
           const r = await fetch(
-            `${JIRA_BASE_URL}/rest/api/3/user?accountId=${assigneeAccountId}`,
+            `${JIRA_BASE_URL}/rest/api/3/user/assignable/search?project=${encodeURIComponent(projectKey)}&maxResults=100`,
             {
               headers: {
                 Authorization: `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`,
@@ -68,45 +69,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               },
             }
           )
-          console.log('[webhook] Jira user API status:', r.status)
-          const jiraUser = await r.json()
-          const email: string = jiraUser.emailAddress ?? ''
-          console.log('[webhook] accountId:', assigneeAccountId, '| email:', email)
+          const jiraUsers: Array<{ accountId: string; displayName: string; emailAddress?: string }> = await r.json()
+          const jiraUser = jiraUsers.find((u) => u.accountId === assigneeAccountId)
+          console.log('[webhook] assignable search result for accountId:', assigneeAccountId, '->', jiraUser?.displayName ?? 'not found')
 
-          if (email) {
-            // 1순위: 이메일로 매핑
-            const emailSnap = await adminDb
-              .collection('users')
-              .where('email', '==', email)
-              .limit(1)
-              .get()
-            if (!emailSnap.empty) {
-              updates.assignedDeveloper = emailSnap.docs[0].data().displayName
-              console.log('[webhook] assignee matched by email:', email, '->', updates.assignedDeveloper)
+          if (jiraUser) {
+            const email = jiraUser.emailAddress ?? ''
+            if (email) {
+              // 이메일로 우리 유저 매핑
+              const emailSnap = await adminDb.collection('users').where('email', '==', email).limit(1).get()
+              if (!emailSnap.empty) {
+                updates.assignedDeveloper = emailSnap.docs[0].data().displayName
+                console.log('[webhook] matched by email:', email, '->', updates.assignedDeveloper)
+              } else {
+                console.log('[webhook] no Firestore user for email:', email)
+              }
             } else {
-              console.log('[webhook] no user in Firestore for email:', email)
-            }
-          } else {
-            // 2순위: 이메일 비공개인 경우 jiraDisplayName 또는 displayName으로 매핑
-            const jiraName: string = jiraUser.displayName ?? ''
-            console.log('[webhook] email hidden, trying jiraName:', jiraName)
-            if (jiraName) {
-              // jiraDisplayName 필드로 먼저 조회
-              const jiraNameSnap = await adminDb
-                .collection('users')
-                .where('jiraDisplayName', '==', jiraName)
-                .limit(1)
-                .get()
+              // 이메일 비공개면 jiraDisplayName → displayName 순으로 fallback
+              const jiraName = jiraUser.displayName
+              console.log('[webhook] email hidden, trying jiraName:', jiraName)
+              const jiraNameSnap = await adminDb.collection('users').where('jiraDisplayName', '==', jiraName).limit(1).get()
               if (!jiraNameSnap.empty) {
                 updates.assignedDeveloper = jiraNameSnap.docs[0].data().displayName
                 console.log('[webhook] matched by jiraDisplayName:', jiraName, '->', updates.assignedDeveloper)
               } else {
-                // displayName과 같은 경우
-                const nameSnap = await adminDb
-                  .collection('users')
-                  .where('displayName', '==', jiraName)
-                  .limit(1)
-                  .get()
+                const nameSnap = await adminDb.collection('users').where('displayName', '==', jiraName).limit(1).get()
                 if (!nameSnap.empty) {
                   updates.assignedDeveloper = jiraName
                   console.log('[webhook] matched by displayName:', jiraName)
