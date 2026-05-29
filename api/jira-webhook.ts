@@ -74,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.log('[webhook] accountId:', assigneeAccountId, '| email:', email)
 
           if (email) {
+            // 1순위: 이메일로 매핑
             const emailSnap = await adminDb
               .collection('users')
               .where('email', '==', email)
@@ -81,12 +82,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               .get()
             if (!emailSnap.empty) {
               updates.assignedDeveloper = emailSnap.docs[0].data().displayName
-              console.log('[webhook] assignee matched:', email, '->', updates.assignedDeveloper)
+              console.log('[webhook] assignee matched by email:', email, '->', updates.assignedDeveloper)
             } else {
               console.log('[webhook] no user in Firestore for email:', email)
             }
           } else {
-            console.log('[webhook] Jira returned no email for accountId:', assigneeAccountId, '| raw:', JSON.stringify(jiraUser))
+            // 2순위: 이메일 비공개인 경우 displayName으로 매핑
+            const displayName: string = jiraUser.displayName ?? ''
+            console.log('[webhook] email hidden, trying displayName:', displayName)
+            if (displayName) {
+              const nameSnap = await adminDb
+                .collection('users')
+                .where('displayName', '==', displayName)
+                .limit(1)
+                .get()
+              if (!nameSnap.empty) {
+                updates.assignedDeveloper = displayName
+                console.log('[webhook] assignee matched by displayName:', displayName)
+              } else {
+                console.log('[webhook] no user in Firestore for displayName:', displayName)
+              }
+            }
           }
         } catch (e) {
           console.log('[webhook] assignee lookup error:', String(e))
