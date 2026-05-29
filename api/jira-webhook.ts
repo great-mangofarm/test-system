@@ -4,10 +4,7 @@ const FIREBASE_PROJECT_ID = 'qa-test-274fa'
 const FIREBASE_API_KEY = process.env.VITE_FIREBASE_API_KEY!
 const JIRA_BASE_URL = process.env.JIRA_BASE_URL! // e.g. https://yourteam.atlassian.net
 
-// Jira 상태명(소문자) → 우리 processingStatus 매핑
-// 백로그: 최초 생성 상태 → 미처리
-// 기획중/개발대기/개발중: 개발자가 브랜치 따거나 논의 시작 → 처리중
-// 그 외(코드리뷰중, 테스트중, 배포완료, 완료): 무시 (개발자가 직접 처리완료 변경)
+// Jira 상태명 → 우리 processingStatus 매핑
 const STATUS_MAP: Record<string, string> = {
   '백로그': 'pending',
   '기획중': 'in_progress',
@@ -20,28 +17,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = req.body
+    console.log('[webhook] received:', JSON.stringify(body?.changelog?.items))
 
     // 상태 변경 이벤트만 처리
     const statusChange = (body?.changelog?.items ?? []).find(
-      (item: { field: string }) => item.field === 'status'
+      (item: Record<string, string>) => item.field === 'status'
     )
     if (!statusChange) {
+      console.log('[webhook] skipped: no status change')
       return res.status(200).json({ skipped: 'no status change in payload' })
     }
 
     const issueKey: string = body?.issue?.key
-    const newJiraStatus: string = statusChange.toString // e.g. "In Progress"
+    // Jira changelog item의 실제 키명은 "toString" (문자열 속성)
+    const newJiraStatus: string = statusChange['toString']
+    console.log('[webhook] issueKey:', issueKey, '| newJiraStatus:', newJiraStatus)
+
     if (!issueKey || !newJiraStatus) {
       return res.status(200).json({ skipped: 'missing issueKey or status' })
     }
 
-    const newProcessingStatus = STATUS_MAP[newJiraStatus.toLowerCase()]
+    const newProcessingStatus = STATUS_MAP[newJiraStatus]
     if (!newProcessingStatus) {
+      console.log('[webhook] skipped: unmapped status:', newJiraStatus)
       return res.status(200).json({ skipped: `unmapped jira status: ${newJiraStatus}` })
     }
 
     // ticketLink로 Firestore 테스트케이스 조회
     const ticketLink = `${JIRA_BASE_URL}/browse/${issueKey}`
+    console.log('[webhook] searching ticketLink:', ticketLink)
+
     const queryUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`
 
     const queryRes = await fetch(queryUrl, {
@@ -62,14 +67,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     })
 
+    if (!queryRes.ok) {
+      const err = await queryRes.json()
+      console.log('[webhook] firestore query error:', JSON.stringify(err))
+      return res.status(500).json({ error: 'firestore query failed', detail: err })
+    }
+
     const queryData = await queryRes.json()
+    console.log('[webhook] query result count:', queryData?.length, '| has doc:', !!queryData?.[0]?.document)
+
     const doc = queryData?.[0]?.document
     if (!doc) {
       return res.status(200).json({ skipped: `no testcase found for ${ticketLink}` })
     }
 
-    // document name에서 ID 추출: .../documents/testcases/{docId}
     const docId = doc.name.split('/').pop()
+    console.log('[webhook] found docId:', docId, '| updating to:', newProcessingStatus)
 
     // processingStatus 업데이트
     const updateUrl = [
@@ -92,11 +105,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!updateRes.ok) {
       const err = await updateRes.json()
+      console.log('[webhook] firestore update error:', JSON.stringify(err))
       return res.status(500).json({ error: 'firestore update failed', detail: err })
     }
 
+    console.log('[webhook] success:', issueKey, '->', newProcessingStatus)
     return res.status(200).json({ ok: true, issueKey, newProcessingStatus })
   } catch (e) {
+    console.log('[webhook] exception:', String(e))
     return res.status(500).json({ error: String(e) })
   }
 }
