@@ -20,7 +20,7 @@ export function Checkbox({ checked, onChange, className, color = 'primary' }: Ch
         className="sr-only"
       />
       <div className={cn(
-        'w-4 h-4 rounded border-2 flex items-center justify-center transition-colors',
+        'w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors',
         checked ? `${bgColor} border-transparent` : `bg-white ${borderColor}`
       )}>
         {checked && (

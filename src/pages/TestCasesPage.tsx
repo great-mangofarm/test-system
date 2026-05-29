@@ -176,7 +176,7 @@ export default function TestCasesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<TestCase | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TestCase | null>(null)
-  const [deleteJiraToo, setDeleteJiraToo] = useState(false)
+  const [deleteJiraToo, setDeleteJiraToo] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<string | null>(null)
   // 인라인 편집 (관리자)
