@@ -19,10 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = req.body
     const items: Record<string, string>[] = body?.changelog?.items ?? []
     const issueKey: string = body?.issue?.key
-
-    if (!issueKey || !items.length) {
-      return res.status(200).json({ skipped: 'no changelog' })
-    }
+    console.log('[webhook] event:', body?.webhookEvent, '| issue:', issueKey, '| items:', JSON.stringify(items))
 
     // 이 티켓에 연결된 테스트케이스 조회
     const ticketLink = `${JIRA_BASE_URL}/browse/${issueKey}`
