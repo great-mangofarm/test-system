@@ -5,23 +5,14 @@ const FIREBASE_API_KEY = process.env.VITE_FIREBASE_API_KEY!
 const JIRA_BASE_URL = process.env.JIRA_BASE_URL! // e.g. https://yourteam.atlassian.net
 
 // Jira 상태명(소문자) → 우리 processingStatus 매핑
+// 백로그: 최초 생성 상태 → 미처리
+// 기획중/개발대기/개발중: 개발자가 브랜치 따거나 논의 시작 → 처리중
+// 그 외(코드리뷰중, 테스트중, 배포완료, 완료): 무시 (개발자가 직접 처리완료 변경)
 const STATUS_MAP: Record<string, string> = {
-  'to do': 'pending',
-  'open': 'pending',
-  'backlog': 'pending',
-  '할 일': 'pending',
-  'in progress': 'in_progress',
-  'in review': 'in_progress',
-  '진행 중': 'in_progress',
-  '검토 중': 'in_progress',
-  'done': 'resolved',
-  'resolved': 'resolved',
-  'closed': 'resolved',
-  '완료': 'resolved',
-  "won't do": 'wont_fix',
-  'wont do': 'wont_fix',
-  'invalid': 'wont_fix',
-  '보류': 'wont_fix',
+  '백로그': 'pending',
+  '기획중': 'in_progress',
+  '개발대기': 'in_progress',
+  '개발중': 'in_progress',
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
