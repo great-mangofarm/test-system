@@ -12,7 +12,7 @@ import {
 import { TestCaseForm } from '@/components/TestCaseForm'
 import type { JiraFields } from '@/components/TestCaseForm'
 import { Checkbox } from '@/components/ui/checkbox'
-import { getProducts, getSuites, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
+import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
 import {
@@ -202,11 +202,23 @@ export default function TestCasesPage() {
     return () => window.removeEventListener('focus', onFocus)
   }, [productId, suiteId])
 
-  // 30초마다 백그라운드 자동 갱신 (Jira 웹훅 동기화 반영)
+  // 60초마다 로딩 표시 없이 조용히 목록 갱신
   useEffect(() => {
-    const timer = setInterval(() => { load() }, 30000)
+    const timer = setInterval(async () => {
+      if (!productId || !suiteId) return
+      try {
+        const [prods, suitesData, casesData, usersData] = await Promise.all([
+          getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(),
+        ])
+        setProduct(prods.find((p) => p.id === productId) ?? null)
+        setSuite(suitesData.find((s) => s.id === suiteId) ?? null)
+        setCases(casesData)
+        setUsers(usersData)
+      } catch { /* 백그라운드 실패는 무시 */ }
+    }, 60000)
     return () => clearInterval(timer)
   }, [productId, suiteId])
+
 
   // ESC 키로 라이트박스 닫기
   useEffect(() => {
@@ -278,10 +290,25 @@ export default function TestCasesPage() {
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
-    if (willExpand && isAdmin) {
-      const tc = cases.find((c) => c.id === id)
-      if (tc) startInlineEdit(tc)
-    } else if (!willExpand && inlineEditId === id) {
+    if (willExpand) {
+      // 아코디언 열 때 해당 항목 최신 데이터 조회
+      getTestCase(id).then((latest) => {
+        if (latest) {
+          setCases((prev) => prev.map((c) => c.id === id ? latest : c))
+          if (isAdmin) startInlineEdit(latest)
+        } else {
+          if (isAdmin) {
+            const tc = cases.find((c) => c.id === id)
+            if (tc) startInlineEdit(tc)
+          }
+        }
+      }).catch(() => {
+        if (isAdmin) {
+          const tc = cases.find((c) => c.id === id)
+          if (tc) startInlineEdit(tc)
+        }
+      })
+    } else if (inlineEditId === id) {
       setInlineEditId(null)
       setInlineForm({})
     }
@@ -445,15 +472,15 @@ export default function TestCasesPage() {
     setInlineForm({ ...merged })
     toast({ title: '변경사항이 저장되었습니다' })
 
-    // 담당자가 변경됐으면 Jira에도 반영 (이메일 확인된 경우만)
+    // 담당자가 변경됐으면 Jira에도 반영
     if (inlineForm.assignedDeveloper !== undefined && inlineForm.assignedDeveloper !== original.assignedDeveloper && original.ticketLink) {
       const issueKey = extractJiraKey(original.ticketLink)
       const dev = users.find((u) => u.displayName === inlineForm.assignedDeveloper)
-      if (issueKey && dev?.email) {
+      if (issueKey && dev) {
         fetch('/api/jira-update-assignee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issueKey, developerEmail: dev.email }),
+          body: JSON.stringify({ issueKey, developerEmail: dev.email, jiraDisplayName: dev.jiraDisplayName ?? dev.displayName }),
         }).catch(() => {})
       }
     }
@@ -470,16 +497,16 @@ export default function TestCasesPage() {
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, assignedDeveloper } : c))
     if (inlineEditId === id) setInlineForm((f) => ({ ...f, assignedDeveloper }))
 
-    // Jira에도 반영 (이메일 확인된 경우만)
+    // Jira에도 반영
     const tc = cases.find((c) => c.id === id)
     if (tc?.ticketLink) {
       const issueKey = extractJiraKey(tc.ticketLink)
       const dev = users.find((u) => u.displayName === assignedDeveloper)
-      if (issueKey && dev?.email) {
+      if (issueKey && dev) {
         fetch('/api/jira-update-assignee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ issueKey, developerEmail: dev.email }),
+          body: JSON.stringify({ issueKey, developerEmail: dev.email, jiraDisplayName: dev.jiraDisplayName ?? dev.displayName }),
         }).catch(() => {})
       }
     }

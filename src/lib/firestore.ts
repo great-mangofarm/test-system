@@ -5,6 +5,7 @@ import {
   updateDoc,
   deleteDoc,
   getDocs,
+  getDoc,
   query,
   where,
   writeBatch,
@@ -73,6 +74,12 @@ export async function deleteSuite(id: string): Promise<void> {
 }
 
 // --- Test Cases ---
+export async function getTestCase(id: string): Promise<TestCase | null> {
+  const snap = await getDoc(doc(db, 'testcases', id))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() } as TestCase
+}
+
 export async function getTestCases(suiteId: string): Promise<TestCase[]> {
   const snap = await getDocs(
     query(collection(db, 'testcases'), where('suiteId', '==', suiteId))
