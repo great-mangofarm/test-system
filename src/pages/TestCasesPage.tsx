@@ -432,12 +432,25 @@ export default function TestCasesPage() {
   }
 
   async function saveInlineEdit(id: string) {
-    const merged = { ...cases.find((c) => c.id === id)!, ...inlineForm }
+    const original = cases.find((c) => c.id === id)!
+    const merged = { ...original, ...inlineForm }
     await updateTestCase(id, inlineForm)
     setCases((prev) => prev.map((c) => c.id === id ? merged : c))
-    // re-init inlineForm from saved state so isDirty becomes false
     setInlineForm({ ...merged })
     toast({ title: '변경사항이 저장되었습니다' })
+
+    // 담당자가 변경됐으면 Jira에도 반영
+    if (inlineForm.assignedDeveloper !== undefined && inlineForm.assignedDeveloper !== original.assignedDeveloper && original.ticketLink) {
+      const issueKey = extractJiraKey(original.ticketLink)
+      if (issueKey) {
+        const dev = users.find((u) => u.displayName === inlineForm.assignedDeveloper)
+        fetch('/api/jira-update-assignee', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ issueKey, developerEmail: dev?.email ?? '' }),
+        }).catch(() => {})
+      }
+    }
   }
 
   async function quickUpdateStatus(id: string, status: TestStatus) {
@@ -450,6 +463,20 @@ export default function TestCasesPage() {
     await updateTestCase(id, { assignedDeveloper })
     setCases((prev) => prev.map((c) => c.id === id ? { ...c, assignedDeveloper } : c))
     if (inlineEditId === id) setInlineForm((f) => ({ ...f, assignedDeveloper }))
+
+    // Jira에도 반영
+    const tc = cases.find((c) => c.id === id)
+    if (tc?.ticketLink) {
+      const issueKey = extractJiraKey(tc.ticketLink)
+      if (issueKey) {
+        const dev = users.find((u) => u.displayName === assignedDeveloper)
+        fetch('/api/jira-update-assignee', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ issueKey, developerEmail: dev?.email ?? '' }),
+        }).catch(() => {})
+      }
+    }
   }
 
   const passRate = stats.total > 0 ? Math.round((stats.pass / stats.total) * 100) : 0
