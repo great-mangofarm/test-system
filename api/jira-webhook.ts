@@ -87,20 +87,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               console.log('[webhook] no user in Firestore for email:', email)
             }
           } else {
-            // 2순위: 이메일 비공개인 경우 displayName으로 매핑
-            const displayName: string = jiraUser.displayName ?? ''
-            console.log('[webhook] email hidden, trying displayName:', displayName)
-            if (displayName) {
-              const nameSnap = await adminDb
+            // 2순위: 이메일 비공개인 경우 jiraDisplayName 또는 displayName으로 매핑
+            const jiraName: string = jiraUser.displayName ?? ''
+            console.log('[webhook] email hidden, trying jiraName:', jiraName)
+            if (jiraName) {
+              // jiraDisplayName 필드로 먼저 조회
+              const jiraNameSnap = await adminDb
                 .collection('users')
-                .where('displayName', '==', displayName)
+                .where('jiraDisplayName', '==', jiraName)
                 .limit(1)
                 .get()
-              if (!nameSnap.empty) {
-                updates.assignedDeveloper = displayName
-                console.log('[webhook] assignee matched by displayName:', displayName)
+              if (!jiraNameSnap.empty) {
+                updates.assignedDeveloper = jiraNameSnap.docs[0].data().displayName
+                console.log('[webhook] matched by jiraDisplayName:', jiraName, '->', updates.assignedDeveloper)
               } else {
-                console.log('[webhook] no user in Firestore for displayName:', displayName)
+                // displayName과 같은 경우
+                const nameSnap = await adminDb
+                  .collection('users')
+                  .where('displayName', '==', jiraName)
+                  .limit(1)
+                  .get()
+                if (!nameSnap.empty) {
+                  updates.assignedDeveloper = jiraName
+                  console.log('[webhook] matched by displayName:', jiraName)
+                } else {
+                  console.log('[webhook] no match for jiraName:', jiraName)
+                }
               }
             }
           }

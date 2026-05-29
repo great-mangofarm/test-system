@@ -6,6 +6,7 @@ export interface UserProfile {
   displayName: string
   role: UserRole
   team: string
+  jiraDisplayName?: string  // Jira에서 표시되는 이름 (다를 경우 매핑용)
   createdAt: string
 }
 

@@ -34,8 +34,10 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState<string | null>(null)
   const [resetting, setResetting] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null)
-  const [teamEditing, setTeamEditing] = useState<string | null>(null)  // uid
+  const [teamEditing, setTeamEditing] = useState<string | null>(null)
   const [teamValue, setTeamValue] = useState('')
+  const [jiraEditing, setJiraEditing] = useState<string | null>(null)
+  const [jiraValue, setJiraValue] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -48,6 +50,18 @@ export default function AdminPage() {
       setUsers(list)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleJiraSave(uid: string) {
+    try {
+      await updateDoc(doc(db, 'users', uid), { jiraDisplayName: jiraValue.trim() })
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, jiraDisplayName: jiraValue.trim() } : u)))
+      toast({ title: 'Jira 이름이 저장되었습니다' })
+    } catch {
+      toast({ title: '저장 실패', variant: 'destructive' })
+    } finally {
+      setJiraEditing(null)
     }
   }
 
@@ -165,6 +179,29 @@ export default function AdminPage() {
                       onClick={() => { setTeamEditing(u.uid); setTeamValue(u.team ?? '') }}
                     >
                       {u.team ? `${u.team}` : '+ 팀 추가'}
+                    </button>
+                  )}
+                  {/* Jira 이름 편집 */}
+                  {jiraEditing === u.uid ? (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Input
+                        autoFocus
+                        className="h-7 text-xs w-36"
+                        placeholder="Jira 표시 이름"
+                        value={jiraValue}
+                        onChange={(e) => setJiraValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleJiraSave(u.uid); if (e.key === 'Escape') setJiraEditing(null) }}
+                      />
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleJiraSave(u.uid)}>
+                        <Check className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      className="text-xs text-slate-400 hover:text-primary mt-0.5 text-left"
+                      onClick={() => { setJiraEditing(u.uid); setJiraValue(u.jiraDisplayName ?? '') }}
+                    >
+                      {u.jiraDisplayName ? `Jira: ${u.jiraDisplayName}` : '+ Jira 이름 추가'}
                     </button>
                   )}
                 </div>
