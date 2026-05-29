@@ -51,28 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 2. 담당자 변경
     const assigneeChange = items.find((i) => i.field === 'assignee')
     if (assigneeChange) {
-      const assigneeEmail: string | undefined = body?.issue?.fields?.assignee?.emailAddress
       const assigneeAccountId: string | undefined = body?.issue?.fields?.assignee?.accountId
 
-      if (!body?.issue?.fields?.assignee) {
-        // 담당자 제거
+      if (!assigneeAccountId) {
         updates.assignedDeveloper = ''
         console.log('[webhook] assignee removed')
-      } else if (assigneeEmail) {
-        // 이메일로 우리 유저 조회
-        const userSnap = await adminDb
-          .collection('users')
-          .where('email', '==', assigneeEmail)
-          .limit(1)
-          .get()
-        if (!userSnap.empty) {
-          updates.assignedDeveloper = userSnap.docs[0].data().displayName
-          console.log('[webhook] assignee email match:', assigneeEmail, '->', updates.assignedDeveloper)
-        } else {
-          console.log('[webhook] no user found for email:', assigneeEmail)
-        }
-      } else if (assigneeAccountId) {
-        // 이메일이 숨겨진 경우 → Jira API로 이메일 조회
+      } else {
+        // accountId → 이메일 → 우리 유저 매핑
         try {
           const r = await fetch(
             `${JIRA_BASE_URL}/rest/api/3/user?accountId=${assigneeAccountId}`,
@@ -83,23 +68,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               },
             }
           )
-          if (r.ok) {
-            const jiraUser = await r.json()
-            const email = jiraUser.emailAddress
-            if (email) {
-              const userSnap = await adminDb
-                .collection('users')
-                .where('email', '==', email)
-                .limit(1)
-                .get()
-              if (!userSnap.empty) {
-                updates.assignedDeveloper = userSnap.docs[0].data().displayName
-                console.log('[webhook] assignee accountId match:', email, '->', updates.assignedDeveloper)
-              }
+          console.log('[webhook] Jira user API status:', r.status)
+          const jiraUser = await r.json()
+          const email: string = jiraUser.emailAddress ?? ''
+          console.log('[webhook] accountId:', assigneeAccountId, '| email:', email)
+
+          if (email) {
+            const emailSnap = await adminDb
+              .collection('users')
+              .where('email', '==', email)
+              .limit(1)
+              .get()
+            if (!emailSnap.empty) {
+              updates.assignedDeveloper = emailSnap.docs[0].data().displayName
+              console.log('[webhook] assignee matched:', email, '->', updates.assignedDeveloper)
+            } else {
+              console.log('[webhook] no user in Firestore for email:', email)
             }
+          } else {
+            console.log('[webhook] Jira returned no email for accountId:', assigneeAccountId, '| raw:', JSON.stringify(jiraUser))
           }
         } catch (e) {
-          console.log('[webhook] failed to fetch assignee by accountId:', String(e))
+          console.log('[webhook] assignee lookup error:', String(e))
         }
       }
     }
