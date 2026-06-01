@@ -43,6 +43,7 @@ const defaultForm: FormData = {
   tester: '',
   assignedDeveloper: '',
   priority: 'medium',
+  startDate: '',
   dueDate: '',
   planningLink: '',
 }
@@ -220,17 +221,28 @@ export function TestCaseForm({ suiteId, initial, users = [], areas, jiraProjectK
             </div>
           </div>
 
-          {/* ── 기한 ── */}
-          <SectionHeader>기한</SectionHeader>
+          {/* ── 일정 ── */}
+          <SectionHeader>일정</SectionHeader>
 
-          <div className="space-y-1.5">
-            <Label>기한</Label>
-            <input
-              type="date"
-              value={form.dueDate}
-              onChange={(e) => set('dueDate', e.target.value)}
-              className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>시작일</Label>
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => set('startDate', e.target.value)}
+                className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>기한</Label>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => set('dueDate', e.target.value)}
+                className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
           </div>
 
           {/* ── 테스트 내용 ── */}

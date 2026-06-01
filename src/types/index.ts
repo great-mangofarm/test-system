@@ -55,9 +55,18 @@ export interface TestCase {
   tester: string
   assignedDeveloper: string
   priority: Priority
+  startDate: string
   dueDate: string
   planningLink: string
   order: number
   createdAt: string
   updatedAt: string
+  // 이슈(개발요청) 전용 필드
+  recordType?: 'testcase' | 'issue'  // undefined = testcase (하위호환)
+  background?: string       // 개요 (프로젝트 배경/개발목적)
+  requirements?: string     // 범위 및 요구사항
+  figmaLink?: string        // 피그마 링크
+  featureSpec?: string      // 기능/화면 정의
+  devChangelog?: string     // 개발 변경 내역 (개발자 작성)
+  testProgressNote?: string // 테스트 진행사항
 }

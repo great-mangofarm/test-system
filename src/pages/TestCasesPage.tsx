@@ -11,6 +11,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TestCaseForm } from '@/components/TestCaseForm'
 import type { JiraFields } from '@/components/TestCaseForm'
+import { IssueForm } from '@/components/IssueForm'
+import { RichTextEditor } from '@/components/RichTextEditor'
+import type { IssueFormData } from '@/components/IssueForm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
 import { useAuth } from '@/store/auth'
@@ -259,6 +262,8 @@ export default function TestCasesPage() {
     }
   }
 
+  const isIssueSuite = suite?.type === 'dev'
+
   const areas = Array.from(new Set(cases.map((c) => c.area).filter(Boolean)))
 
   const developers = Array.from(new Set(cases.map((c) => c.assignedDeveloper).filter(Boolean)))
@@ -362,10 +367,12 @@ export default function TestCasesPage() {
           issueType: jiraFields.issueType,
           assigneeAccountId: assigneeAccountId || null,
           reporterName: reporterName || undefined,
+          reporterEmail: user?.email || undefined,
+          startDate: data.startDate || undefined,
           dueDate: data.dueDate || undefined,
           // 이슈트래커 URL을 기획서링크로 전송
           planningLink: issueTrackerUrl || undefined,
-          images: data.images.length > 0 ? data.images : undefined,
+          images: data.images && data.images.length > 0 ? data.images : undefined,
         }),
       })
       const resJson = await res.json()
@@ -414,6 +421,87 @@ export default function TestCasesPage() {
         toast({ title: '추가 완료 (Jira 티켓 미생성)' })
       }
     }
+    setDialogOpen(false)
+    await load()
+  }
+
+  async function handleIssueSave(data: IssueFormData, jiraFields: { issueType: string }) {
+    if (!productId || !suiteId) return
+    const order = cases.length > 0 ? Math.max(...cases.map((c) => c.order)) + 1 : 0
+
+    // 1. Firestore 이슈 먼저 생성 → ID 확보
+    const newId = await createTestCase({
+      recordType: 'issue',
+      area: data.area,
+      title: data.title,
+      priority: data.priority,
+      assignedDeveloper: data.assignedDeveloper,
+      processingStatus: data.processingStatus,
+      ticketLink: data.ticketLink,
+      background: data.background,
+      requirements: data.requirements,
+      figmaLink: data.figmaLink,
+      featureSpec: data.featureSpec,
+      devChangelog: '',
+      testProgressNote: '',
+      startDate: data.startDate,
+      dueDate: data.dueDate,
+      // 테스트케이스 필드 빈값
+      status: 'not_tested',
+      steps: data.background,
+      expectedResult: '',
+      actualResult: '',
+      developerNote: '',
+      tester: '',
+      images: [],
+      resultNote: '',
+      resultImages: [],
+      planningLink: '',
+      suiteId,
+      productId,
+      order,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+
+    // 2. 이슈트래커 URL 생성
+    const issueTrackerUrl = `${window.location.origin}/products/${productId}/suites/${suiteId}#${newId}`
+
+    // 3. Jira 티켓 생성 (background를 steps 역할로 전달)
+    const jiraProjectKey = product?.jiraProjectKey
+    let jiraUrl: string | null = null
+    if (jiraProjectKey) {
+      const fakeFormData: FormData = {
+        area: data.area,
+        title: data.title,
+        priority: data.priority,
+        assignedDeveloper: data.assignedDeveloper,
+        processingStatus: data.processingStatus,
+        ticketLink: data.ticketLink,
+        steps: data.background,
+        expectedResult: '',
+        actualResult: '',
+        status: 'not_tested',
+        developerNote: '',
+        tester: '',
+        images: [],
+        resultNote: '',
+        resultImages: [],
+        startDate: data.startDate,
+        dueDate: data.dueDate,
+        planningLink: '',
+      }
+      jiraUrl = await createJiraTicket(fakeFormData, { issueType: jiraFields.issueType }, issueTrackerUrl)
+    }
+
+    // 4. Jira 티켓 URL 업데이트
+    if (jiraUrl) {
+      await updateTestCase(newId, { ticketLink: jiraUrl })
+      toast({ title: '등록 완료 · Jira 티켓 생성됨' })
+    } else {
+      toast({ title: '등록 완료 (Jira 티켓 미생성)' })
+    }
+
     setDialogOpen(false)
     await load()
   }
@@ -534,20 +622,32 @@ export default function TestCasesPage() {
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             {isAdmin && (
               <DialogTrigger asChild>
-                <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1" /> 항목 추가</Button>
+                <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1" /> {isIssueSuite ? '이슈 등록' : '테스트 추가'}</Button>
               </DialogTrigger>
             )}
             {dialogOpen && (
-              <TestCaseForm
-                suiteId={suiteId!}
-                initial={editTarget ?? undefined}
-                users={users}
-                areas={product?.areas ?? []}
-                jiraProjectKey={editTarget ? undefined : product?.jiraProjectKey}
-                currentUserDisplayName={user?.displayName}
-                onSave={handleSave}
-                onCancel={() => setDialogOpen(false)}
-              />
+              isIssueSuite ? (
+                <IssueForm
+                  suiteId={suiteId!}
+                  users={users}
+                  areas={product?.areas}
+                  jiraProjectKey={product?.jiraProjectKey}
+                  currentUserDisplayName={user?.displayName}
+                  onSave={handleIssueSave}
+                  onCancel={() => setDialogOpen(false)}
+                />
+              ) : (
+                <TestCaseForm
+                  suiteId={suiteId!}
+                  initial={editTarget ?? undefined}
+                  users={users}
+                  areas={product?.areas ?? []}
+                  jiraProjectKey={editTarget ? undefined : product?.jiraProjectKey}
+                  currentUserDisplayName={user?.displayName}
+                  onSave={handleSave}
+                  onCancel={() => setDialogOpen(false)}
+                />
+              )
             )}
           </Dialog>
           </div>
@@ -660,18 +760,32 @@ export default function TestCasesPage() {
           <div className="rounded-lg border border-slate-200 shadow-sm overflow-hidden">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
-              <tr className="text-xs text-slate-600 font-semibold whitespace-nowrap">
-                <th className="px-4 py-3 text-left w-20">ID</th>
-                <th className="px-4 py-3 text-left w-24">영역</th>
-                <th className="px-4 py-3 text-left w-16">우선순위</th>
-                <th className="px-4 py-3 text-left">제목</th>
-                <th className="px-4 py-3 text-left w-28">담당개발자</th>
-                <th className="px-4 py-3 text-left w-28">테스트결과</th>
-                <th className="px-4 py-3 text-left w-28">처리상태</th>
-                <th className="px-4 py-3 text-left w-24">등록일</th>
-                <th className="px-4 py-3 text-center w-10"></th>
-                <th className="px-4 py-3 text-center w-24"></th>
-              </tr>
+              {isIssueSuite ? (
+                <tr className="text-xs text-slate-600 font-semibold whitespace-nowrap">
+                  <th className="px-4 py-3 text-left w-20">ID</th>
+                  <th className="px-4 py-3 text-left w-24">영역</th>
+                  <th className="px-4 py-3 text-left w-16">우선순위</th>
+                  <th className="px-4 py-3 text-left">제목</th>
+                  <th className="px-4 py-3 text-left w-28">담당개발자</th>
+                  <th className="px-4 py-3 text-left w-28">처리상태</th>
+                  <th className="px-4 py-3 text-left w-24">등록일</th>
+                  <th className="px-4 py-3 text-center w-10"></th>
+                  <th className="px-4 py-3 text-center w-24"></th>
+                </tr>
+              ) : (
+                <tr className="text-xs text-slate-600 font-semibold whitespace-nowrap">
+                  <th className="px-4 py-3 text-left w-20">ID</th>
+                  <th className="px-4 py-3 text-left w-24">영역</th>
+                  <th className="px-4 py-3 text-left w-16">우선순위</th>
+                  <th className="px-4 py-3 text-left">제목</th>
+                  <th className="px-4 py-3 text-left w-28">담당개발자</th>
+                  <th className="px-4 py-3 text-left w-28">테스트결과</th>
+                  <th className="px-4 py-3 text-left w-28">처리상태</th>
+                  <th className="px-4 py-3 text-left w-24">등록일</th>
+                  <th className="px-4 py-3 text-center w-10"></th>
+                  <th className="px-4 py-3 text-center w-24"></th>
+                </tr>
+              )}
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
               {filtered.map((tc) => (
@@ -700,32 +814,48 @@ export default function TestCasesPage() {
                     </td>
                     <td className="px-4 py-2.5 max-w-xs">
                       <div className="font-medium text-slate-800 truncate">{tc.title}</div>
-                      {tc.tester && (
+                      {!isIssueSuite && tc.tester && (
                         <div className="text-xs text-slate-400 mt-0.5">등록자: {tc.tester}</div>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-sm text-slate-600 whitespace-nowrap">
-                      {tc.assignedDeveloper || <span className="text-slate-300">—</span>}
-                    </td>
                     <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      {canEditStatus ? (
-                        <Select value={tc.status} onValueChange={(v) => quickUpdateStatus(tc.id, v as TestStatus)}>
-                          <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium px-2', TEST_STATUS_COLORS[tc.status])}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="not_tested">미테스트</SelectItem>
-                            <SelectItem value="pass">통과</SelectItem>
-                            <SelectItem value="fail">실패</SelectItem>
-                            <SelectItem value="blocked">블로킹</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      {isIssueSuite ? (
+                        canEditStatus ? (
+                          <Select value={tc.assignedDeveloper || '__none__'} onValueChange={(v) => quickUpdateAssignedDeveloper(tc.id, v === '__none__' ? '' : v)}>
+                            <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">—</SelectItem>
+                              {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-sm text-slate-600">{tc.assignedDeveloper || <span className="text-slate-300">—</span>}</span>
+                        )
                       ) : (
-                        <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
-                          {TEST_STATUS_LABELS[tc.status]}
-                        </span>
+                        <span className="text-sm text-slate-600 whitespace-nowrap">{tc.assignedDeveloper || <span className="text-slate-300">—</span>}</span>
                       )}
                     </td>
+                    {!isIssueSuite && (
+                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        {canEditStatus ? (
+                          <Select value={tc.status} onValueChange={(v) => quickUpdateStatus(tc.id, v as TestStatus)}>
+                            <SelectTrigger className={cn('w-24 h-7 text-xs border-0 rounded-full font-medium px-2', TEST_STATUS_COLORS[tc.status])}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="not_tested">미테스트</SelectItem>
+                              <SelectItem value="pass">통과</SelectItem>
+                              <SelectItem value="fail">실패</SelectItem>
+                              <SelectItem value="blocked">블로킹</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className={cn('text-xs px-2 py-1 rounded-full font-medium', TEST_STATUS_COLORS[tc.status])}>
+                            {TEST_STATUS_LABELS[tc.status]}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                       {canEditStatus ? (
                         <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
@@ -770,15 +900,17 @@ export default function TestCasesPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="w-3.5 h-3.5" /></Button>
                           </a>
                         )}
-                        {isAdmin && (
+                        {isAdmin && !isIssueSuite && (
                           <>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(tc)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(tc)}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
                           </>
+                        )}
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(tc)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400" onClick={() => toggleExpand(tc.id)}>
                           {expanded.has(tc.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -790,7 +922,7 @@ export default function TestCasesPage() {
                   {/* Detail Row */}
                   {expanded.has(tc.id) && (
                     <tr className="bg-slate-50/80">
-                      <td colSpan={10} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
+                      <td colSpan={isIssueSuite ? 9 : 10} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
                         {(() => {
                           const isEditing = inlineEditId === tc.id
                           const f = isEditing ? inlineForm : tc
@@ -814,6 +946,170 @@ export default function TestCasesPage() {
                               {value || <span className="text-slate-300">—</span>}
                             </div>
                           )
+
+                          if (isIssueSuite) {
+                            return (
+                              <div className="space-y-4">
+                                {/* 헤더 */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      className="text-xs font-mono text-slate-500 hover:text-primary transition-colors"
+                                      title="클릭하여 복사"
+                                      onClick={() => { navigator.clipboard.writeText(`TC-${String(tc.order + 1).padStart(3, '0')}`); toast({ title: '복사됨' }) }}
+                                    >
+                                      TC-{String(tc.order + 1).padStart(3, '0')}
+                                    </button>
+                                    <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    className={cn('h-7 text-xs transition-opacity', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+                                    onClick={() => saveInlineEdit(tc.id)}
+                                  >
+                                    <Check className="w-3 h-3 mr-1"/>변경사항 저장
+                                  </Button>
+                                </div>
+
+                                {/* 메타 정보 (2컬럼) */}
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">영역</p>
+                                    {isEditing
+                                      ? <Input className="h-8 text-sm" value={f.area ?? ''} onChange={(e) => setF('area', e.target.value)} />
+                                      : <p className="text-sm font-medium text-slate-700">{tc.area || <span className="text-slate-300">—</span>}</p>}
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">우선순위</p>
+                                    {isEditing ? (
+                                      <Select value={f.priority as string} onValueChange={(v) => setF('priority', v)}>
+                                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="critical">긴급</SelectItem>
+                                          <SelectItem value="high">높음</SelectItem>
+                                          <SelectItem value="medium">보통</SelectItem>
+                                          <SelectItem value="low">낮음</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    ) : <span className={cn('text-xs px-2 py-0.5 rounded font-medium', PRIORITY_COLORS[tc.priority])}>{PRIORITY_LABELS[tc.priority]}</span>}
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">담당 개발자</p>
+                                    {isEditing ? (
+                                      <Select value={f.assignedDeveloper || '__none__'} onValueChange={(v) => setF('assignedDeveloper', v === '__none__' ? '' : v)}>
+                                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">—</SelectItem>
+                                          {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : canEditStatus ? (
+                                      <Select value={tc.assignedDeveloper || '__none__'} onValueChange={(v) => quickUpdateAssignedDeveloper(tc.id, v === '__none__' ? '' : v)}>
+                                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">—</SelectItem>
+                                          {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : <p className="text-sm font-medium text-slate-700">{tc.assignedDeveloper || <span className="text-slate-300">—</span>}</p>}
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">처리 상태</p>
+                                    {canEditStatus ? (
+                                      <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
+                                        <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="pending">미처리</SelectItem>
+                                          <SelectItem value="in_progress">처리중</SelectItem>
+                                          <SelectItem value="resolved">처리완료</SelectItem>
+                                          <SelectItem value="wont_fix">보류</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    ) : <span className={cn('text-xs px-2 py-1 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}>{PROCESSING_STATUS_LABELS[tc.processingStatus]}</span>}
+                                  </div>
+                                  <div className="col-span-2">
+                                    <p className="text-xs text-slate-400 mb-1">Jira 티켓</p>
+                                    {isEditing
+                                      ? <div className="flex items-center gap-1">
+                                          <Input className="h-8 text-sm min-w-0" placeholder="https://..." value={f.ticketLink ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
+                                          {f.ticketLink && <a href={f.ticketLink as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>}
+                                        </div>
+                                      : tc.ticketLink
+                                        ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
+                                        : <span className="text-slate-300 text-sm">—</span>}
+                                  </div>
+                                </div>
+
+                                {/* 개요 */}
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">개요</p>
+                                  <RichTextEditor
+                                    value={(f.background as string) ?? ''}
+                                    onChange={(v) => setF('background', v)}
+                                    placeholder="프로젝트 배경 및 개발 목적"
+                                    readOnly={!isAdmin}
+                                  />
+                                </div>
+
+                                {/* 범위 및 요구사항 */}
+                                <div>
+                                  <p className="text-xs text-slate-400 mb-1">범위 및 요구사항</p>
+                                  <RichTextEditor
+                                    value={(f.requirements as string) ?? ''}
+                                    onChange={(v) => setF('requirements', v)}
+                                    placeholder="요구사항 및 범위"
+                                    readOnly={!isAdmin}
+                                  />
+                                </div>
+
+                                {/* 기능/화면 정의 */}
+                                <div className="space-y-2">
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">피그마 링크</p>
+                                    {isAdmin
+                                      ? <Input className="h-8 text-sm" placeholder="https://www.figma.com/..." value={(f.figmaLink as string) ?? ''} onChange={(e) => setF('figmaLink', e.target.value)} />
+                                      : tc.figmaLink
+                                        ? <a href={tc.figmaLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.figmaLink}</a>
+                                        : <span className="text-slate-300 text-sm">—</span>}
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-slate-400 mb-1">기능 / 화면 정의</p>
+                                    <RichTextEditor
+                                      value={(f.featureSpec as string) ?? ''}
+                                      onChange={(v) => setF('featureSpec', v)}
+                                      placeholder="화면 구성 및 기능 상세 정의"
+                                      readOnly={!isAdmin}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* 개발 변경 내역 */}
+                                <div>
+                                  <p className="text-xs text-blue-500 font-medium mb-1">개발 변경 내역</p>
+                                  <RichTextEditor
+                                    value={tc.devChangelog ?? ''}
+                                    onChange={async (v) => {
+                                      await updateTestCase(tc.id, { devChangelog: v })
+                                      setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, devChangelog: v } : c))
+                                    }}
+                                    placeholder="개발 변경 내역을 입력하세요..."
+                                    readOnly={!canEditStatus}
+                                  />
+                                </div>
+
+                                {/* 테스트 진행사항 */}
+                                <div>
+                                  <p className="text-xs text-amber-500 font-medium mb-1">테스트 진행사항</p>
+                                  <RichTextEditor
+                                    value={(f.testProgressNote as string) ?? ''}
+                                    onChange={(v) => setF('testProgressNote', v)}
+                                    placeholder="테스트 진행사항 입력"
+                                    readOnly={!isAdmin}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          }
 
                           return (
                           <div className="space-y-3">
@@ -928,7 +1224,7 @@ export default function TestCasesPage() {
                                   {isEditing
                                     ? <div className="flex items-center gap-1">
                                         <Input className="h-8 text-sm min-w-0" placeholder="https://..." value={f.ticketLink ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
-                                        {f.ticketLink && <a href={f.ticketLink} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>}
+                                        {f.ticketLink && <a href={f.ticketLink as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>}
                                       </div>
                                     : tc.ticketLink
                                       ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>

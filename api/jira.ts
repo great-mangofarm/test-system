@@ -51,7 +51,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     issueType,
     assigneeAccountId,
     reporterName,
+    reporterEmail,
     dueDate,
+    startDate,
     planningLink,
     images,
   } = req.body
@@ -71,11 +73,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (assigneeAccountId) {
     fields.assignee = { id: assigneeAccountId }
   }
+
+  // 보고자 (reporter) - 이메일로 accountId 조회
+  if (reporterEmail) {
+    try {
+      const authHeader = `Basic ${Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`
+      const r = await fetch(
+        `${JIRA_BASE_URL}/rest/api/3/user/search?query=${encodeURIComponent(reporterEmail)}`,
+        { headers: { Authorization: authHeader, Accept: 'application/json' } }
+      )
+      if (r.ok) {
+        const users = await r.json()
+        const match = users.find((u: { emailAddress: string }) => u.emailAddress === reporterEmail)
+        if (match) fields.reporter = { id: match.accountId }
+      }
+    } catch { /* reporter 설정 실패 시 무시 */ }
+  }
+
+  // 요청자 (커스텀 필드)
   if (reporterName) {
     fields.customfield_10037 = reporterName
   }
+  // 기한
   if (dueDate) {
     fields.duedate = dueDate
+  }
+  // 시작일
+  if (startDate) {
+    fields.customfield_10015 = startDate
   }
   if (planningLink) {
     fields.customfield_10122 = planningLink
