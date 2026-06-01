@@ -443,6 +443,10 @@ export default function TestCasesPage() {
       figmaLink: data.figmaLink,
       featureSpec: data.featureSpec,
       devChangelog: '',
+      testChecklist: data.testChecklistItems
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((text) => ({ text, checked: false })),
       testProgressNote: '',
       startDate: data.startDate,
       dueDate: data.dueDate,
@@ -467,31 +471,51 @@ export default function TestCasesPage() {
     // 2. 이슈트래커 URL 생성
     const issueTrackerUrl = `${window.location.origin}/products/${productId}/suites/${suiteId}#${newId}`
 
-    // 3. Jira 티켓 생성 (background를 steps 역할로 전달)
+    // 3. Jira 티켓 생성 (개발요청 전용 필드로 직접 호출)
     const jiraProjectKey = product?.jiraProjectKey
     let jiraUrl: string | null = null
     if (jiraProjectKey) {
-      const fakeFormData: FormData = {
-        area: data.area,
-        title: data.title,
-        priority: data.priority,
-        assignedDeveloper: data.assignedDeveloper,
-        processingStatus: data.processingStatus,
-        ticketLink: data.ticketLink,
-        steps: data.background,
-        expectedResult: '',
-        actualResult: '',
-        status: 'not_tested',
-        developerNote: '',
-        tester: '',
-        images: [],
-        resultNote: '',
-        resultImages: [],
-        startDate: data.startDate,
-        dueDate: data.dueDate,
-        planningLink: '',
+      try {
+        const reporterName = user ? [user.team, user.displayName].filter(Boolean).join(' ') : undefined
+        let assigneeAccountId: string | undefined
+        if (data.assignedDeveloper) {
+          const assigneeUser = users.find((u) => u.displayName === data.assignedDeveloper)
+          if (assigneeUser?.email) {
+            const r = await fetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
+            if (r.ok) {
+              const d = await r.json()
+              if (d?.accountId) assigneeAccountId = d.accountId
+            }
+          }
+        }
+        const res = await fetch('/api/jira', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectKey: jiraProjectKey,
+            title: data.title,
+            area: data.area,
+            priority: data.priority,
+            issueType: jiraFields.issueType,
+            assigneeAccountId: assigneeAccountId || null,
+            reporterName: reporterName || undefined,
+            reporterEmail: user?.email || undefined,
+            startDate: data.startDate || undefined,
+            dueDate: data.dueDate || undefined,
+            planningLink: issueTrackerUrl || undefined,
+            recordType: 'issue',
+            background: data.background,
+            requirements: data.requirements,
+            figmaLink: data.figmaLink,
+            featureSpec: data.featureSpec,
+          }),
+        })
+        const resJson = await res.json()
+        if (res.ok) jiraUrl = resJson.issueUrl
+        else toast({ variant: 'destructive', title: 'Jira 티켓 생성 실패', description: JSON.stringify(resJson.error ?? resJson) })
+      } catch (e) {
+        toast({ variant: 'destructive', title: 'Jira 티켓 생성 실패', description: String(e) })
       }
-      jiraUrl = await createJiraTicket(fakeFormData, { issueType: jiraFields.issueType }, issueTrackerUrl)
     }
 
     // 4. Jira 티켓 URL 업데이트
@@ -1095,6 +1119,38 @@ export default function TestCasesPage() {
                                     placeholder="개발 변경 내역을 입력하세요..."
                                     readOnly={!canEditStatus}
                                   />
+                                </div>
+
+                                {/* 테스트 체크리스트 */}
+                                <div>
+                                  <p className="text-xs text-emerald-600 font-medium mb-2">테스트 체크리스트</p>
+                                  {(tc.testChecklist && tc.testChecklist.length > 0) ? (
+                                    <div className="space-y-1.5">
+                                      {tc.testChecklist.map((item, idx) => (
+                                        <label key={idx} className="flex items-start gap-2 cursor-pointer group">
+                                          <Checkbox
+                                            checked={item.checked}
+                                            onChange={async (checked: boolean) => {
+                                              const updated = tc.testChecklist!.map((it, i) =>
+                                                i === idx ? { ...it, checked } : it
+                                              )
+                                              await updateTestCase(tc.id, { testChecklist: updated })
+                                              setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, testChecklist: updated } : c))
+                                            }}
+                                            className="mt-0.5"
+                                          />
+                                          <span className={cn('text-sm leading-relaxed', item.checked ? 'line-through text-slate-400' : 'text-slate-700')}>
+                                            {item.text}
+                                          </span>
+                                        </label>
+                                      ))}
+                                      <p className="text-xs text-slate-400 pt-1">
+                                        {tc.testChecklist.filter((i) => i.checked).length} / {tc.testChecklist.length} 완료
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-slate-300">—</p>
+                                  )}
                                 </div>
 
                                 {/* 테스트 진행사항 */}

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RichTextEditor } from '@/components/RichTextEditor'
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Plus, X } from 'lucide-react'
 import type { Priority, ProcessingStatus, UserProfile } from '@/types'
 
 export type IssueFormData = {
@@ -21,6 +22,7 @@ export type IssueFormData = {
   figmaLink: string
   featureSpec: string
   devChangelog: string
+  testChecklistItems: string[]
   testProgressNote: string
 }
 
@@ -49,25 +51,55 @@ const defaultForm: IssueFormData = {
   figmaLink: '',
   featureSpec: '',
   devChangelog: '',
+  testChecklistItems: [],
   testProgressNote: '',
-}
-
-function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 pt-1">
-      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">{children}</span>
-      <div className="flex-1 h-px bg-slate-100" />
-    </div>
-  )
 }
 
 export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, onCancel }: Props) {
   const [form, setForm] = useState<IssueFormData>({ ...defaultForm, ...initial })
   const [saving, setSaving] = useState(false)
   const [jiraIssueType, setJiraIssueType] = useState('스토리')
+  const addBtnRef = useRef<HTMLButtonElement>(null)
 
   function set<K extends keyof IssueFormData>(key: K, value: IssueFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function addChecklistItem() {
+    set('testChecklistItems', [...form.testChecklistItems, ''])
+    setTimeout(() => {
+      const inputs = document.querySelectorAll<HTMLInputElement>('[data-checklist-item]')
+      inputs[inputs.length - 1]?.focus()
+    }, 50)
+  }
+
+  function updateChecklistItem(idx: number, value: string) {
+    set('testChecklistItems', form.testChecklistItems.map((item, i) => (i === idx ? value : item)))
+  }
+
+  function removeChecklistItem(idx: number) {
+    set('testChecklistItems', form.testChecklistItems.filter((_, i) => i !== idx))
+  }
+
+  function handleChecklistKeyDown(e: React.KeyboardEvent<HTMLInputElement>, idx: number) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const updated = [...form.testChecklistItems]
+      updated.splice(idx + 1, 0, '')
+      set('testChecklistItems', updated)
+      setTimeout(() => {
+        const inputs = document.querySelectorAll<HTMLInputElement>('[data-checklist-item]')
+        inputs[idx + 1]?.focus()
+      }, 50)
+    }
+    if (e.key === 'Backspace' && form.testChecklistItems[idx] === '' && form.testChecklistItems.length > 1) {
+      e.preventDefault()
+      removeChecklistItem(idx)
+      setTimeout(() => {
+        const inputs = document.querySelectorAll<HTMLInputElement>('[data-checklist-item]')
+        inputs[Math.max(0, idx - 1)]?.focus()
+      }, 50)
+    }
   }
 
   async function handleSave() {
@@ -81,26 +113,23 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
   }
 
   return (
-    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{initial?.title ? '개발요청 수정' : '새 개발요청 (운영 이슈)'}</DialogTitle>
       </DialogHeader>
 
-      <div className="space-y-5 py-2">
+      <div className="space-y-4 py-2">
 
-        {/* ── 기본 정보 ── */}
-        <SectionHeader>기본 정보</SectionHeader>
-
-        <div className="space-y-1.5">
-          <Label>제목 <span className="text-destructive">*</span></Label>
-          <Input
-            placeholder="예: 로그인 화면 UI 개선 요청"
-            value={form.title}
-            onChange={(e) => set('title', e.target.value)}
-          />
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
+        {/* 상단 메타 — 4컬럼 그리드 */}
+        <div className="grid grid-cols-4 gap-3">
+          <div className="space-y-1.5 col-span-2">
+            <Label>제목 <span className="text-destructive">*</span></Label>
+            <Input
+              placeholder="예: 로그인 화면 UI 개선 요청"
+              value={form.title}
+              onChange={(e) => set('title', e.target.value)}
+            />
+          </div>
           <div className="space-y-1.5">
             <Label>영역 / 기능</Label>
             {areas && areas.length > 0 ? (
@@ -112,11 +141,7 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
                 </SelectContent>
               </Select>
             ) : (
-              <Input
-                placeholder="예: 로그인, 결제"
-                value={form.area}
-                onChange={(e) => set('area', e.target.value)}
-              />
+              <Input placeholder="예: 로그인, 결제" value={form.area} onChange={(e) => set('area', e.target.value)} />
             )}
           </div>
           <div className="space-y-1.5">
@@ -145,12 +170,18 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
               <Input placeholder="이름" value={form.assignedDeveloper} onChange={(e) => set('assignedDeveloper', e.target.value)} />
             )}
           </div>
-        </div>
-
-        {/* ── 일정 ── */}
-        <SectionHeader>일정</SectionHeader>
-
-        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>처리 상태</Label>
+            <Select value={form.processingStatus} onValueChange={(v) => set('processingStatus', v as ProcessingStatus)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">미처리</SelectItem>
+                <SelectItem value="in_progress">처리중</SelectItem>
+                <SelectItem value="resolved">처리완료</SelectItem>
+                <SelectItem value="wont_fix">보류</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1.5">
             <Label>시작일</Label>
             <input
@@ -171,57 +202,95 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
           </div>
         </div>
 
-        {/* ── 개요 ── */}
-        <SectionHeader>개요</SectionHeader>
+        {/* 하단 콘텐츠 — 좌/우 독립 컬럼 */}
+        <div className="flex gap-6 items-start">
 
-        <div className="space-y-1.5">
-          <Label>개요 (프로젝트 배경 / 개발 목적)</Label>
-          <RichTextEditor
-            value={form.background}
-            onChange={(v) => set('background', v)}
-            placeholder="프로젝트 배경 및 이 요청의 목적을 설명해주세요"
-          />
-        </div>
-
-        {/* ── 범위 및 요구사항 ── */}
-        <SectionHeader>범위 및 요구사항</SectionHeader>
-
-        <div className="space-y-1.5">
-          <Label>범위 및 요구사항</Label>
-          <RichTextEditor
-            value={form.requirements}
-            onChange={(v) => set('requirements', v)}
-            placeholder="요구사항과 범위를 입력하세요 (목록 사용 가능)"
-          />
-        </div>
-
-        {/* ── 기능/화면 정의 ── */}
-        <SectionHeader>기능 / 화면 정의</SectionHeader>
-
-        <div className="space-y-1.5">
-          <Label>피그마 링크</Label>
-          <Input
-            placeholder="https://www.figma.com/..."
-            value={form.figmaLink}
-            onChange={(e) => set('figmaLink', e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>기능 / 화면 정의</Label>
-          <RichTextEditor
-            value={form.featureSpec}
-            onChange={(v) => set('featureSpec', v)}
-            placeholder="화면 구성 및 기능 상세 정의를 입력해주세요"
-          />
-        </div>
-
-        {/* ── Jira 연동 ── */}
-        {jiraProjectKey && (
-          <>
-            <SectionHeader>Jira 연동</SectionHeader>
+          {/* 왼쪽: 개요 + 기능/화면 정의 */}
+          <div className="flex-1 space-y-4">
             <div className="space-y-1.5">
-              <Label>업무유형</Label>
+              <Label>개요 (프로젝트 배경 / 개발 목적)</Label>
+              <RichTextEditor
+                value={form.background}
+                onChange={(v) => set('background', v)}
+                placeholder="프로젝트 배경 및 이 요청의 목적을 설명해주세요"
+                className="[&_.tiptap]:min-h-[160px]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>기능 / 화면 정의</Label>
+              <RichTextEditor
+                value={form.featureSpec}
+                onChange={(v) => set('featureSpec', v)}
+                placeholder="화면 구성 및 기능 상세 정의를 입력해주세요"
+                className="[&_.tiptap]:min-h-[200px]"
+              />
+            </div>
+          </div>
+
+          {/* 오른쪽: 범위및요구사항 + 체크리스트 */}
+          <div className="flex-1 space-y-4">
+            <div className="space-y-1.5">
+              <Label>범위 및 요구사항</Label>
+              <RichTextEditor
+                value={form.requirements}
+                onChange={(v) => set('requirements', v)}
+                placeholder="요구사항과 범위를 입력하세요 (목록 사용 가능)"
+                className="[&_.tiptap]:min-h-[160px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>테스트 체크리스트</Label>
+              {form.testChecklistItems.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-slate-300 text-sm select-none w-5 text-right shrink-0">{idx + 1}.</span>
+                  <Input
+                    data-checklist-item
+                    className="h-8 text-sm flex-1"
+                    placeholder="테스트 항목 입력"
+                    value={item}
+                    onChange={(e) => updateChecklistItem(idx, e.target.value)}
+                    onKeyDown={(e) => handleChecklistKeyDown(e, idx)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeChecklistItem(idx)}
+                    className="shrink-0 text-slate-300 hover:text-destructive transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs text-slate-500 border-dashed w-full"
+                onClick={addChecklistItem}
+                ref={addBtnRef}
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />항목 추가
+              </Button>
+              {form.testChecklistItems.length > 0 && (
+                <p className="text-xs text-slate-400">Enter로 다음 항목 · 빈 항목에서 Backspace로 삭제</p>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* 하단: 피그마링크 | Jira 업무유형 */}
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-1.5">
+            <Label>피그마 링크</Label>
+            <Input
+              placeholder="https://www.figma.com/..."
+              value={form.figmaLink}
+              onChange={(e) => set('figmaLink', e.target.value)}
+            />
+          </div>
+          {jiraProjectKey ? (
+            <div className="space-y-1.5">
+              <Label>Jira 업무유형</Label>
               <Select value={jiraIssueType} onValueChange={setJiraIssueType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -232,10 +301,10 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
                   <SelectItem value="하위 작업">하위 작업</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-slate-400 pt-0.5">담당자는 담당개발자 계정으로 자동 연결됩니다</p>
             </div>
-            <p className="text-xs text-slate-400">담당자는 담당개발자 계정으로 자동 연결됩니다</p>
-          </>
-        )}
+          ) : <div />}
+        </div>
 
       </div>
 

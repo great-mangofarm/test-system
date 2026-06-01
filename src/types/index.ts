@@ -68,5 +68,6 @@ export interface TestCase {
   figmaLink?: string        // 피그마 링크
   featureSpec?: string      // 기능/화면 정의
   devChangelog?: string     // 개발 변경 내역 (개발자 작성)
+  testChecklist?: Array<{ text: string; checked: boolean }> // 테스트 체크리스트
   testProgressNote?: string // 테스트 진행사항
 }
