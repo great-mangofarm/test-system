@@ -661,7 +661,7 @@ export default function TestCasesPage() {
           <table className="w-full text-sm border-collapse">
             <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
               <tr className="text-xs text-slate-600 font-semibold whitespace-nowrap">
-                <th className="px-4 py-3 text-left w-9">#</th>
+                <th className="px-4 py-3 text-left w-20">ID</th>
                 <th className="px-4 py-3 text-left w-24">영역</th>
                 <th className="px-4 py-3 text-left w-16">우선순위</th>
                 <th className="px-4 py-3 text-left">제목</th>
@@ -674,7 +674,7 @@ export default function TestCasesPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
-              {filtered.map((tc, idx) => (
+              {filtered.map((tc) => (
                 <Fragment key={tc.id}>
                   {/* Main Row */}
                   <tr
@@ -682,7 +682,11 @@ export default function TestCasesPage() {
                     className={cn('hover:bg-slate-50 cursor-pointer transition-colors whitespace-nowrap', expanded.has(tc.id) ? 'bg-sky-50 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent')}
                     onClick={() => toggleExpand(tc.id)}
                   >
-                    <td className="px-4 py-2.5 text-xs text-slate-400">{idx + 1}</td>
+                    <td className="px-4 py-2.5" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`TC-${String(tc.order + 1).padStart(3, '0')}`); toast({ title: '복사됨' }) }}>
+                      <span className="text-xs font-mono text-slate-500 hover:text-primary cursor-pointer" title="클릭하여 복사">
+                        TC-{String(tc.order + 1).padStart(3, '0')}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5">
                       {tc.area
                         ? <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{tc.area}</span>
@@ -815,7 +819,16 @@ export default function TestCasesPage() {
                           <div className="space-y-3">
                             {/* 헤더 */}
                             <div className="flex items-center justify-between">
-                              <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  className="text-xs font-mono text-slate-500 hover:text-primary transition-colors"
+                                  title="클릭하여 복사"
+                                  onClick={() => { navigator.clipboard.writeText(`TC-${String(tc.order + 1).padStart(3, '0')}`); toast({ title: '복사됨' }) }}
+                                >
+                                  TC-{String(tc.order + 1).padStart(3, '0')}
+                                </button>
+                                <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
+                              </div>
                               <Button
                                 size="sm"
                                 className={cn('h-7 text-xs transition-opacity', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
