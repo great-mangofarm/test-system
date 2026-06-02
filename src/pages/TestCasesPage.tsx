@@ -975,20 +975,23 @@ export default function TestCasesPage() {
                             return (
                               <div className="space-y-4">
                                 {/* 헤더 */}
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-3 min-w-0">
                                     <button
-                                      className="text-xs font-mono text-slate-500 hover:text-primary transition-colors"
+                                      className="text-xs font-mono text-slate-500 hover:text-primary transition-colors shrink-0"
                                       title="클릭하여 복사"
                                       onClick={() => { navigator.clipboard.writeText(`TC-${String(tc.order + 1).padStart(3, '0')}`); toast({ title: '복사됨' }) }}
                                     >
                                       TC-{String(tc.order + 1).padStart(3, '0')}
                                     </button>
-                                    <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
+                                    {isEditing
+                                      ? <Input className="h-7 text-sm font-medium" value={f.title ?? ''} onChange={(e) => setF('title', e.target.value)} />
+                                      : <span className="text-sm font-semibold text-slate-800 truncate">{tc.title}</span>}
+                                    <span className="text-xs text-slate-400 shrink-0">등록일 {formatDate(tc.createdAt)}</span>
                                   </div>
                                   <Button
                                     size="sm"
-                                    className={cn('h-7 text-xs transition-opacity', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+                                    className={cn('h-7 text-xs transition-opacity shrink-0', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
                                     onClick={() => saveInlineEdit(tc.id)}
                                   >
                                     <Check className="w-3 h-3 mr-1"/>변경사항 저장
@@ -1170,20 +1173,23 @@ export default function TestCasesPage() {
                           return (
                           <div className="space-y-3">
                             {/* 헤더 */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3 min-w-0">
                                 <button
-                                  className="text-xs font-mono text-slate-500 hover:text-primary transition-colors"
+                                  className="text-xs font-mono text-slate-500 hover:text-primary transition-colors shrink-0"
                                   title="클릭하여 복사"
                                   onClick={() => { navigator.clipboard.writeText(`TC-${String(tc.order + 1).padStart(3, '0')}`); toast({ title: '복사됨' }) }}
                                 >
                                   TC-{String(tc.order + 1).padStart(3, '0')}
                                 </button>
-                                <span className="text-xs text-slate-400">등록일 {formatDate(tc.createdAt)}</span>
+                                {isEditing
+                                  ? <Input className="h-7 text-sm font-medium" value={f.title ?? ''} onChange={(e) => setF('title', e.target.value)} />
+                                  : <span className="text-sm font-semibold text-slate-800 truncate">{tc.title}</span>}
+                                <span className="text-xs text-slate-400 shrink-0">등록일 {formatDate(tc.createdAt)}</span>
                               </div>
                               <Button
                                 size="sm"
-                                className={cn('h-7 text-xs transition-opacity', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+                                className={cn('h-7 text-xs transition-opacity shrink-0', isDirty ? 'opacity-100' : 'opacity-0 pointer-events-none')}
                                 onClick={() => saveInlineEdit(tc.id)}
                               >
                                 <Check className="w-3 h-3 mr-1"/>변경사항 저장

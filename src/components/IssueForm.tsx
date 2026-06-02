@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RichTextEditor } from '@/components/RichTextEditor'
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Plus, X } from 'lucide-react'
+import { toast } from '@/hooks/use-toast'
 import type { Priority, ProcessingStatus, UserProfile } from '@/types'
 
 export type IssueFormData = {
@@ -103,7 +104,10 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
   }
 
   async function handleSave() {
-    if (!form.title.trim()) return
+    if (!form.title.trim()) {
+      toast({ variant: 'destructive', title: '제목을 입력해주세요' })
+      return
+    }
     setSaving(true)
     try {
       await onSave(form, { issueType: jiraIssueType })
@@ -145,7 +149,7 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>우선순위</Label>
+            <Label>우선순위 <span className="text-destructive">*</span></Label>
             <Select value={form.priority} onValueChange={(v) => set('priority', v as Priority)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -310,7 +314,7 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
 
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>취소</Button>
-        <Button onClick={handleSave} disabled={!form.title.trim() || saving}>
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? '저장 중...' : '등록'}
         </Button>
       </DialogFooter>
