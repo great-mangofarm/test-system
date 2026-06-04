@@ -15,6 +15,7 @@ import { IssueForm } from '@/components/IssueForm'
 import { RichTextEditor } from '@/components/RichTextEditor'
 import type { IssueFormData } from '@/components/IssueForm'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Sheet, SheetHeader, SheetBody, SheetFooter } from '@/components/ui/sheet'
 import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
@@ -538,6 +539,30 @@ export default function TestCasesPage() {
 
   const [jiraRetrying, setJiraRetrying] = useState<string | null>(null)
   const [issueImageUploading, setIssueImageUploading] = useState<string | null>(null)
+  const [drawerTcId, setDrawerTcId] = useState<string | null>(null)
+  const drawerTc = cases.find((c) => c.id === drawerTcId) ?? null
+
+  function openDrawer(id: string) {
+    setDrawerTcId(id)
+    getTestCase(id).then((latest) => {
+      if (latest) {
+        setCases((prev) => prev.map((c) => c.id === id ? latest : c))
+        startInlineEdit(latest)
+      } else {
+        const tc = cases.find((c) => c.id === id)
+        if (tc) startInlineEdit(tc)
+      }
+    }).catch(() => {
+      const tc = cases.find((c) => c.id === id)
+      if (tc) startInlineEdit(tc)
+    })
+  }
+
+  function closeDrawer() {
+    setDrawerTcId(null)
+    setInlineEditId(null)
+    setInlineForm({})
+  }
 
   async function retryCreateJira(tc: TestCase) {
     if (!product?.jiraProjectKey) return
@@ -876,8 +901,8 @@ export default function TestCasesPage() {
                   {/* Main Row */}
                   <tr
                     id={tc.id}
-                    className={cn('hover:bg-slate-50 cursor-pointer transition-colors whitespace-nowrap', expanded.has(tc.id) ? 'bg-sky-50 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent')}
-                    onClick={() => toggleExpand(tc.id)}
+                    className={cn('hover:bg-slate-50 cursor-pointer transition-colors whitespace-nowrap', isIssueSuite ? (drawerTcId === tc.id ? 'bg-sky-50 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent') : (expanded.has(tc.id) ? 'bg-sky-50 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'))}
+                    onClick={() => isIssueSuite ? openDrawer(tc.id) : toggleExpand(tc.id)}
                   >
                     <td className="px-4 py-2.5" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`TC-${String(tc.order + 1).padStart(3, '0')}`); toast({ title: '복사됨' }) }}>
                       <span className="text-xs font-mono text-slate-500 hover:text-primary cursor-pointer" title="클릭하여 복사">
@@ -995,15 +1020,15 @@ export default function TestCasesPage() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400" onClick={() => toggleExpand(tc.id)}>
-                          {expanded.has(tc.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400" onClick={() => isIssueSuite ? openDrawer(tc.id) : toggleExpand(tc.id)}>
+                          {isIssueSuite ? <ChevronDown className="w-3.5 h-3.5" /> : expanded.has(tc.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </Button>
                       </div>
                     </td>
                   </tr>
 
-                  {/* Detail Row */}
-                  {expanded.has(tc.id) && (
+                  {/* Detail Row (테스트케이스만, 이슈는 드로어) */}
+                  {!isIssueSuite && expanded.has(tc.id) && (
                     <tr className="bg-slate-50/80">
                       <td colSpan={isIssueSuite ? 9 : 10} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
                         {(() => {
@@ -1521,6 +1546,197 @@ export default function TestCasesPage() {
       </main>
 
       {/* Delete Confirm */}
+      {/* ── 이슈 드로어 ── */}
+      {(() => {
+        const tc = drawerTc
+        if (!tc) return null
+        const isEditing = inlineEditId === tc.id
+        const f = isEditing ? inlineForm : tc
+        const setF = (key: keyof TestCase, val: string) => setInlineForm((p) => ({ ...p, [key]: val }))
+        const isDirty = isEditing && Object.keys(inlineForm).some((k) => {
+          const key = k as keyof TestCase
+          return (inlineForm as unknown as Record<string, unknown>)[key] !== (tc as unknown as Record<string, unknown>)[key]
+        })
+        return (
+          <Sheet open={!!drawerTcId} onClose={closeDrawer}>
+            <SheetHeader onClose={closeDrawer}>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-xs font-mono text-slate-400 shrink-0">TC-{String(tc.order + 1).padStart(3, '0')}</span>
+                <Input className="h-7 text-sm font-semibold border-transparent hover:border-slate-200 focus:border-primary flex-1" value={(f.title as string) ?? ''} onChange={(e) => setF('title', e.target.value)} readOnly={!isAdmin} />
+                <span className="text-xs text-slate-400 shrink-0">등록일 {formatDate(tc.createdAt)}</span>
+              </div>
+            </SheetHeader>
+
+            <SheetBody className="px-6 py-5 space-y-5">
+              {/* 메타 정보 */}
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">영역</p>
+                  {isAdmin ? <Input className="h-8 text-sm" value={(f.area as string) ?? ''} onChange={(e) => setF('area', e.target.value)} />
+                    : <p className="text-sm font-medium text-slate-700">{tc.area || '—'}</p>}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">우선순위</p>
+                  <Select value={(f.priority as string)} onValueChange={(v) => setF('priority', v)}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="critical">긴급</SelectItem>
+                      <SelectItem value="high">높음</SelectItem>
+                      <SelectItem value="medium">보통</SelectItem>
+                      <SelectItem value="low">낮음</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">담당 개발자</p>
+                  <Select value={(f.assignedDeveloper as string) || '__none__'} onValueChange={(v) => setF('assignedDeveloper', v === '__none__' ? '' : v)}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">—</SelectItem>
+                      {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">처리 상태</p>
+                  <Select value={tc.processingStatus} onValueChange={(v) => quickUpdateProcessing(tc.id, v as ProcessingStatus)}>
+                    <SelectTrigger className={cn('h-8 text-xs border-0 rounded-full font-medium', PROCESSING_STATUS_COLORS[tc.processingStatus])}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">미처리</SelectItem>
+                      <SelectItem value="in_progress">처리중</SelectItem>
+                      <SelectItem value="resolved">처리완료</SelectItem>
+                      <SelectItem value="wont_fix">보류</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">시작일</p>
+                  <input type="date" className="h-8 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    value={(f.startDate as string) ?? ''} onChange={(e) => setF('startDate', e.target.value)} readOnly={!isAdmin} />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">기한</p>
+                  <input type="date" className="h-8 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    value={(f.dueDate as string) ?? ''} onChange={(e) => setF('dueDate', e.target.value)} readOnly={!isAdmin} />
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-400 mb-1">Jira 티켓</p>
+                  <div className="flex items-center gap-2">
+                    <Input className="h-8 text-sm flex-1" placeholder="https://..." value={(f.ticketLink as string) ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
+                    {f.ticketLink
+                      ? <a href={f.ticketLink as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>
+                      : <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" disabled={jiraRetrying === tc.id} onClick={() => retryCreateJira(tc)}>
+                          {jiraRetrying === tc.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin"/>생성 중...</> : 'Jira 티켓 생성'}
+                        </Button>}
+                  </div>
+                </div>
+              </div>
+
+              {/* 콘텐츠 2컬럼 */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">개요</p>
+                    <RichTextEditor value={(f.background as string) ?? ''} onChange={(v) => setF('background', v)} placeholder="프로젝트 배경 및 개발 목적" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">기능 / 화면 정의</p>
+                    {isAdmin && <div className="mb-1">
+                      <p className="text-xs text-slate-400">피그마 링크</p>
+                      <Input className="h-7 text-xs mb-1" placeholder="https://www.figma.com/..." value={(f.figmaLink as string) ?? ''} onChange={(e) => setF('figmaLink', e.target.value)} />
+                    </div>}
+                    {!isAdmin && tc.figmaLink && <a href={tc.figmaLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-xs mb-1 hover:underline"><ExternalLink className="w-3 h-3"/>{tc.figmaLink}</a>}
+                    <RichTextEditor value={(f.featureSpec as string) ?? ''} onChange={(v) => setF('featureSpec', v)} placeholder="화면 구성 및 기능 상세 정의" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">범위 및 요구사항</p>
+                    <RichTextEditor value={(f.requirements as string) ?? ''} onChange={(v) => setF('requirements', v)} placeholder="요구사항 및 범위" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-emerald-600 font-medium mb-2">테스트 체크리스트</p>
+                    {(tc.testChecklist && tc.testChecklist.length > 0) ? (
+                      <div className="space-y-1.5">
+                        {tc.testChecklist.map((item, idx) => (
+                          <label key={idx} className="flex items-start gap-2 cursor-pointer">
+                            <Checkbox checked={item.checked} onChange={async (checked) => {
+                              const updated = tc.testChecklist!.map((it, i) => i === idx ? { ...it, checked } : it)
+                              await updateTestCase(tc.id, { testChecklist: updated })
+                              setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, testChecklist: updated } : c))
+                            }} className="mt-0.5" />
+                            <span className={cn('text-sm leading-relaxed', item.checked ? 'line-through text-slate-400' : 'text-slate-700')}>{item.text}</span>
+                          </label>
+                        ))}
+                        <p className="text-xs text-slate-400 pt-1">{tc.testChecklist.filter((i) => i.checked).length} / {tc.testChecklist.length} 완료</p>
+                      </div>
+                    ) : <p className="text-sm text-slate-300">—</p>}
+                  </div>
+                  <div>
+                    <p className="text-xs text-amber-500 font-medium mb-1">테스트 진행사항</p>
+                    <RichTextEditor value={(f.testProgressNote as string) ?? ''} onChange={(v) => setF('testProgressNote', v)} placeholder="테스트 진행사항 입력" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[100px]" />
+                  </div>
+                </div>
+              </div>
+
+              {/* 개발 변경 내역 (full width) */}
+              <div>
+                <p className="text-xs text-blue-500 font-medium mb-1">개발 변경 내역</p>
+                <RichTextEditor value={tc.devChangelog ?? ''} onChange={async (v) => {
+                  await updateTestCase(tc.id, { devChangelog: v })
+                  setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, devChangelog: v } : c))
+                }} placeholder="개발 변경 내역을 입력하세요..." readOnly={!canEditStatus} className="[&_.tiptap]:min-h-[100px]" />
+              </div>
+
+              {/* 첨부 이미지 */}
+              <div>
+                <p className="text-xs text-slate-400 font-medium mb-2">첨부 이미지 {(tc.images ?? []).length > 0 && `(${tc.images.length})`}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(tc.images ?? []).map((url, i) => (
+                    <div key={i} className="relative group">
+                      <img src={url} alt="" className="w-20 h-20 object-cover rounded-md border cursor-pointer hover:opacity-80" onClick={() => setLightbox(url)} />
+                      <button className="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow p-0.5 hidden group-hover:flex text-slate-400 hover:text-destructive"
+                        onClick={async () => {
+                          const updated = tc.images.filter((_, j) => j !== i)
+                          await updateTestCase(tc.id, { images: updated })
+                          setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, images: updated } : c))
+                        }}><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                  <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-md cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-colors">
+                    {issueImageUploading === tc.id ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                      : <><ImagePlus className="w-5 h-5 text-slate-300 mb-1" /><span className="text-xs text-slate-400">추가</span></>}
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? [])
+                      if (!files.length) return
+                      setIssueImageUploading(tc.id)
+                      try {
+                        const urls = await Promise.all(files.map((file) => uploadImage(file)))
+                        const updated = [...(tc.images ?? []), ...urls]
+                        await updateTestCase(tc.id, { images: updated })
+                        setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, images: updated } : c))
+                      } catch {
+                        toast({ variant: 'destructive', title: '이미지 업로드 실패' })
+                      } finally {
+                        setIssueImageUploading(null)
+                        e.target.value = ''
+                      }
+                    }} />
+                  </label>
+                </div>
+              </div>
+            </SheetBody>
+
+            <SheetFooter>
+              <Button variant="outline" onClick={closeDrawer}>닫기</Button>
+              <Button disabled={!isDirty} onClick={() => saveInlineEdit(tc.id)}>
+                <Check className="w-3.5 h-3.5 mr-1" />변경사항 저장
+              </Button>
+            </SheetFooter>
+          </Sheet>
+        )
+      })()}
+
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) { setDeleteTarget(null); setDeleteJiraToo(false) } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
