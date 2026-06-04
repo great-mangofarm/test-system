@@ -29,7 +29,7 @@ export function Sheet({ open, onClose, children, className }: SheetProps) {
       {/* 오버레이 */}
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-200',
+          'fixed inset-0 z-40 bg-black/20 transition-opacity duration-200',
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
         )}
         onClick={onClose}
