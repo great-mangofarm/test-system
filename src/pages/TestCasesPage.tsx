@@ -1114,11 +1114,9 @@ export default function TestCasesPage() {
                                           <Input className="h-8 text-sm min-w-0 flex-1" placeholder="https://..." value={f.ticketLink ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
                                           {f.ticketLink
                                             ? <a href={f.ticketLink as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>
-                                            : product?.jiraProjectKey
-                                              ? <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" disabled={jiraRetrying === tc.id} onClick={() => retryCreateJira(tc)}>
-                                                  {jiraRetrying === tc.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin"/>생성 중...</> : 'Jira 티켓 생성'}
-                                                </Button>
-                                              : null}
+                                            : <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" disabled={jiraRetrying === tc.id} onClick={() => retryCreateJira(tc)}>
+                                                {jiraRetrying === tc.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin"/>생성 중...</> : 'Jira 티켓 생성'}
+                                              </Button>}
                                         </div>
                                       : tc.ticketLink
                                         ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
