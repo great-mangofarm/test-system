@@ -537,6 +537,7 @@ export default function TestCasesPage() {
   }
 
   const [jiraRetrying, setJiraRetrying] = useState<string | null>(null)
+  const [issueImageUploading, setIssueImageUploading] = useState<string | null>(null)
 
   async function retryCreateJira(tc: TestCase) {
     if (!product?.jiraProjectKey) return
@@ -1227,6 +1228,52 @@ export default function TestCasesPage() {
                                     placeholder="테스트 진행사항 입력"
                                     readOnly={!isAdmin}
                                   />
+                                </div>
+
+                                {/* 첨부 이미지 */}
+                                <div>
+                                  <p className="text-xs text-slate-400 font-medium mb-2">첨부 이미지 {(tc.images ?? []).length > 0 && `(${tc.images.length})`}</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(tc.images ?? []).map((url, i) => (
+                                      <div key={i} className="relative group">
+                                        <img
+                                          src={url}
+                                          alt=""
+                                          className="w-20 h-20 object-cover rounded-md border cursor-pointer hover:opacity-80"
+                                          onClick={() => setLightbox(url)}
+                                        />
+                                        <button
+                                          className="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow p-0.5 hidden group-hover:flex text-slate-400 hover:text-destructive"
+                                          onClick={async () => {
+                                            const updated = tc.images.filter((_, j) => j !== i)
+                                            await updateTestCase(tc.id, { images: updated })
+                                            setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, images: updated } : c))
+                                          }}
+                                        ><X className="w-3 h-3" /></button>
+                                      </div>
+                                    ))}
+                                    <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-md cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-colors">
+                                      {issueImageUploading === tc.id
+                                        ? <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                                        : <><ImagePlus className="w-5 h-5 text-slate-300 mb-1" /><span className="text-xs text-slate-400">추가</span></>}
+                                      <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
+                                        const files = Array.from(e.target.files ?? [])
+                                        if (!files.length) return
+                                        setIssueImageUploading(tc.id)
+                                        try {
+                                          const urls = await Promise.all(files.map((f) => uploadImage(f)))
+                                          const updated = [...(tc.images ?? []), ...urls]
+                                          await updateTestCase(tc.id, { images: updated })
+                                          setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, images: updated } : c))
+                                        } catch {
+                                          toast({ variant: 'destructive', title: '이미지 업로드 실패' })
+                                        } finally {
+                                          setIssueImageUploading(null)
+                                          e.target.value = ''
+                                        }
+                                      }} />
+                                    </label>
+                                  </div>
                                 </div>
                               </div>
                             )

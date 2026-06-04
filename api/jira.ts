@@ -11,6 +11,22 @@ const PRIORITY_MAP: Record<string, string> = {
   low: 'Low',
 }
 
+// HTML 태그 제거 (Tiptap 출력 → 평문)
+function stripHtml(html: string): string {
+  return (html ?? '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function buildADF(area: string, steps: string, expectedResult: string, actualResult: string) {
   const content: unknown[] = []
 
@@ -29,6 +45,46 @@ function buildADF(area: string, steps: string, expectedResult: string, actualRes
   if (steps) addSection('테스트 절차', steps)
   if (expectedResult) addSection('기대 결과', expectedResult)
   if (actualResult) addSection('실제 결과', actualResult)
+
+  return {
+    type: 'doc',
+    version: 1,
+    content: content.length > 0 ? content : [{ type: 'paragraph', content: [] }],
+  }
+}
+
+// HTML → ADF paragraph 노드 배열 (줄바꿈마다 별도 paragraph)
+function htmlToADFParagraphs(html: string): unknown[] {
+  const text = stripHtml(html)
+  if (!text.trim()) return []
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line }] }))
+}
+
+function buildIssueADF(background: string, requirements: string, figmaLink: string, featureSpec: string) {
+  const content: unknown[] = []
+
+  function addSection(label: string, html: string) {
+    const paras = htmlToADFParagraphs(html)
+    if (paras.length === 0) return
+    content.push(
+      { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: label }] },
+      ...paras,
+    )
+  }
+
+  addSection('개요', background)
+  addSection('범위 및 요구사항', requirements)
+  if (figmaLink) {
+    content.push(
+      { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: '피그마 링크' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: figmaLink, marks: [{ type: 'link', attrs: { href: figmaLink } }] }] },
+    )
+  }
+  addSection('기능 / 화면 정의', featureSpec)
 
   return {
     type: 'doc',
@@ -56,6 +112,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     startDate,
     planningLink,
     images,
+    // 개발요청 이슈 전용
+    recordType,
+    background,
+    requirements,
+    figmaLink,
+    featureSpec,
   } = req.body
 
   if (!projectKey || !title) {
@@ -67,7 +129,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     summary: title,
     issuetype: { name: issueType || '버그' },
     priority: { name: PRIORITY_MAP[priority] ?? 'Medium' },
-    description: buildADF(area, steps, expectedResult, actualResult),
+    description: recordType === 'issue'
+      ? buildIssueADF(background ?? '', requirements ?? '', figmaLink ?? '', featureSpec ?? '')
+      : buildADF(area, steps, expectedResult, actualResult),
   }
 
   if (assigneeAccountId) {
