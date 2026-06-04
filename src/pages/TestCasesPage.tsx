@@ -536,6 +536,59 @@ export default function TestCasesPage() {
     return match ? match[1] : null
   }
 
+  const [jiraRetrying, setJiraRetrying] = useState<string | null>(null)
+
+  async function retryCreateJira(tc: TestCase) {
+    if (!product?.jiraProjectKey) return
+    setJiraRetrying(tc.id)
+    try {
+      const issueTrackerUrl = `${window.location.origin}/products/${productId}/suites/${suiteId}#${tc.id}`
+      let assigneeAccountId: string | undefined
+      if (tc.assignedDeveloper) {
+        const assigneeUser = users.find((u) => u.displayName === tc.assignedDeveloper)
+        if (assigneeUser?.email) {
+          const r = await fetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
+          if (r.ok) { const d = await r.json(); if (d?.accountId) assigneeAccountId = d.accountId }
+        }
+      }
+      const reporterName = user ? [user.team, user.displayName].filter(Boolean).join(' ') : undefined
+      const res = await fetch('/api/jira', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectKey: product.jiraProjectKey,
+          title: tc.title,
+          area: tc.area,
+          priority: tc.priority,
+          issueType: '스토리',
+          assigneeAccountId: assigneeAccountId || null,
+          reporterName: reporterName || undefined,
+          reporterEmail: user?.email || undefined,
+          startDate: tc.startDate || undefined,
+          dueDate: tc.dueDate || undefined,
+          planningLink: issueTrackerUrl,
+          recordType: 'issue',
+          background: tc.background,
+          requirements: tc.requirements,
+          figmaLink: tc.figmaLink,
+          featureSpec: tc.featureSpec,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.issueUrl) {
+        await updateTestCase(tc.id, { ticketLink: data.issueUrl })
+        setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, ticketLink: data.issueUrl } : c))
+        toast({ title: 'Jira 티켓 생성됨', description: data.issueUrl })
+      } else {
+        toast({ variant: 'destructive', title: 'Jira 티켓 생성 실패', description: JSON.stringify(data.error ?? data) })
+      }
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Jira 티켓 생성 실패', description: String(e) })
+    } finally {
+      setJiraRetrying(null)
+    }
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return
     // Jira 티켓도 삭제
@@ -1063,7 +1116,11 @@ export default function TestCasesPage() {
                                         </div>
                                       : tc.ticketLink
                                         ? <a href={tc.ticketLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-sm hover:underline break-all"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.ticketLink}</a>
-                                        : <span className="text-slate-300 text-sm">—</span>}
+                                        : product?.jiraProjectKey
+                                          ? <Button size="sm" variant="outline" className="h-7 text-xs" disabled={jiraRetrying === tc.id} onClick={() => retryCreateJira(tc)}>
+                                              {jiraRetrying === tc.id ? <><Loader2 className="w-3 h-3 mr-1 animate-spin"/>생성 중...</> : 'Jira 티켓 생성'}
+                                            </Button>
+                                          : <span className="text-slate-300 text-sm">—</span>}
                                   </div>
                                 </div>
 
