@@ -270,7 +270,10 @@ export default function TestCasesPage() {
   const developers = Array.from(new Set(cases.map((c) => c.assignedDeveloper).filter(Boolean)))
 
   const filtered = cases.filter((c) => {
-    if (hideCompleted && c.status === 'pass' && c.processingStatus === 'resolved') return false
+    if (hideCompleted) {
+      if (isIssueSuite && c.processingStatus === 'resolved') return false
+      if (!isIssueSuite && c.status === 'pass' && c.processingStatus === 'resolved') return false
+    }
     if (filterStatus !== 'all' && c.status !== filterStatus) return false
     if (filterProcessing !== 'all' && c.processingStatus !== filterProcessing) return false
     if (filterArea !== 'all' && c.area !== filterArea) return false
