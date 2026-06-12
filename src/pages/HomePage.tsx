@@ -273,7 +273,7 @@ function SortableSuite({
 
 export default function HomePage() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'developer'
   const navigate = useNavigate()
 
   const [products, setProducts] = useState<Product[]>([])

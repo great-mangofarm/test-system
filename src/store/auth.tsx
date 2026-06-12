@@ -69,7 +69,7 @@ export async function register(email: string, password: string, displayName: str
     uid: user.uid,
     email,
     displayName,
-    role: 'viewer' as UserRole,
+    role: 'staff' as UserRole,
     createdAt: new Date().toISOString(),
   })
 }

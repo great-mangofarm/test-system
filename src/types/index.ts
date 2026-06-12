@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'developer' | 'viewer'
+export type UserRole = 'admin' | 'developer' | 'staff' | 'viewer'
 
 export interface UserProfile {
   uid: string
@@ -14,7 +14,7 @@ export type SuiteType = 'qa' | 'dev'
 
 export type Priority = 'critical' | 'high' | 'medium' | 'low'
 export type TestStatus = 'pass' | 'fail' | 'blocked' | 'not_tested'
-export type ProcessingStatus = 'pending' | 'in_progress' | 'resolved' | 'wont_fix'
+export type ProcessingStatus = 'pending' | 'in_progress' | 'dev_deployed' | 'resolved' | 'wont_fix'
 
 export interface Product {
   id: string

@@ -170,7 +170,7 @@ export default function TestCasesPage() {
   const { productId, suiteId } = useParams<{ productId: string; suiteId: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'developer'
   const canEditStatus = user?.role === 'admin' || user?.role === 'developer'
   const [product, setProduct] = useState<Product | null>(null)
   const [suite, setSuite] = useState<TestSuite | null>(null)
@@ -806,6 +806,7 @@ export default function TestCasesPage() {
             <SelectItem value="all">전체</SelectItem>
             <SelectItem value="pending">미처리</SelectItem>
             <SelectItem value="in_progress">처리중</SelectItem>
+            <SelectItem value="dev_deployed">개발배포</SelectItem>
             <SelectItem value="resolved">처리완료</SelectItem>
             <SelectItem value="wont_fix">보류</SelectItem>
           </SelectContent>
@@ -976,6 +977,7 @@ export default function TestCasesPage() {
                           <SelectContent>
                             <SelectItem value="pending">미처리</SelectItem>
                             <SelectItem value="in_progress">처리중</SelectItem>
+                            <SelectItem value="dev_deployed">개발배포</SelectItem>
                             <SelectItem value="resolved">처리완료</SelectItem>
                             <SelectItem value="wont_fix">보류</SelectItem>
                           </SelectContent>
@@ -1135,6 +1137,7 @@ export default function TestCasesPage() {
                                         <SelectContent>
                                           <SelectItem value="pending">미처리</SelectItem>
                                           <SelectItem value="in_progress">처리중</SelectItem>
+                                          <SelectItem value="dev_deployed">개발배포</SelectItem>
                                           <SelectItem value="resolved">처리완료</SelectItem>
                                           <SelectItem value="wont_fix">보류</SelectItem>
                                         </SelectContent>
@@ -1412,6 +1415,7 @@ export default function TestCasesPage() {
                                       <SelectContent>
                                         <SelectItem value="pending">미처리</SelectItem>
                                         <SelectItem value="in_progress">처리중</SelectItem>
+                                        <SelectItem value="dev_deployed">개발배포</SelectItem>
                                         <SelectItem value="resolved">처리완료</SelectItem>
                                         <SelectItem value="wont_fix">보류</SelectItem>
                                       </SelectContent>
@@ -1607,6 +1611,7 @@ export default function TestCasesPage() {
                     <SelectContent>
                       <SelectItem value="pending">미처리</SelectItem>
                       <SelectItem value="in_progress">처리중</SelectItem>
+                      <SelectItem value="dev_deployed">개발배포</SelectItem>
                       <SelectItem value="resolved">처리완료</SelectItem>
                       <SelectItem value="wont_fix">보류</SelectItem>
                     </SelectContent>
