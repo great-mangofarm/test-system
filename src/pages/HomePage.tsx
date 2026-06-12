@@ -23,19 +23,52 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ChangePasswordModal } from '@/components/ChangePasswordModal'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   getProducts, createProduct, updateProduct, deleteProduct, reorderProducts,
   getSuites, createSuite, updateSuite, deleteSuite, reorderSuites, getSuiteStats,
   type SuiteStats,
 } from '@/lib/firestore'
+import { ROLE_LABELS, VIEW_CONTROL_ROLES, canViewByRole } from '@/lib/constants'
 import { useAuth, logout, deleteAccount } from '@/store/auth'
-import type { Product, TestSuite, SuiteType } from '@/types'
+import type { Product, TestSuite, SuiteType, UserRole } from '@/types'
 import {
   Plus, Package, ClipboardList, ArrowRight, Pencil, Trash2,
-  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X,
+  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X, Lock,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+
+// 일부 역할에게 가려진(=전체 공개가 아닌) 항목인지 판단 — admin 목록의 🔒 표시용
+function isRoleRestricted(visibleRoles?: UserRole[]): boolean {
+  return !!visibleRoles && VIEW_CONTROL_ROLES.some((r) => !visibleRoles.includes(r))
+}
+
+// 노출 권한 체크박스 그룹 (다이얼로그 공용)
+function VisibleRolesField({
+  value, onChange,
+}: {
+  value: UserRole[]
+  onChange: (roles: UserRole[]) => void
+}) {
+  function toggle(role: UserRole, checked: boolean) {
+    onChange(checked ? [...value, role] : value.filter((r) => r !== role))
+  }
+  return (
+    <div className="space-y-2">
+      <Label>노출 권한 <span className="text-xs text-slate-400 font-normal">— 이 항목을 볼 수 있는 역할</span></Label>
+      <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border border-slate-200 px-3 py-2.5">
+        {VIEW_CONTROL_ROLES.map((role) => (
+          <label key={role} className="flex items-center gap-1.5 cursor-pointer text-sm text-slate-700">
+            <Checkbox checked={value.includes(role)} onChange={(c) => toggle(role, c)} />
+            {ROLE_LABELS[role]}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-slate-400">관리자·개발자는 항상 볼 수 있습니다. 모두 해제하면 관리자·개발자만 보입니다.</p>
+    </div>
+  )
+}
 
 const SUITE_TYPE_LABELS: Record<SuiteType, string> = { qa: '테스트케이스', dev: '개발요청' }
 const SUITE_TYPE_COLORS: Record<SuiteType, string> = {
@@ -99,11 +132,12 @@ type SuiteDialog = { mode: 'create' | 'edit'; target?: TestSuite }
 
 // Sortable product item
 function SortableProduct({
-  product, selected, isAdmin, onSelect, onEdit, onDelete,
+  product, selected, isAdmin, restricted, onSelect, onEdit, onDelete,
 }: {
   product: Product
   selected: boolean
   isAdmin: boolean
+  restricted: boolean
   onSelect: () => void
   onEdit: () => void
   onDelete: () => void
@@ -134,6 +168,7 @@ function SortableProduct({
       )}
       <Package className="w-4 h-4 shrink-0" />
       <span className="text-sm flex-1 truncate">{product.name}</span>
+      {restricted && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
       {isAdmin && (
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
           <button className="p-0.5 rounded hover:bg-slate-200" onClick={(e) => { e.stopPropagation(); onEdit() }}>
@@ -150,11 +185,12 @@ function SortableProduct({
 
 // Sortable suite item
 function SortableSuite({
-  suite, stats, isAdmin, onOpen, onEdit, onDelete,
+  suite, stats, isAdmin, restricted, onOpen, onEdit, onDelete,
 }: {
   suite: TestSuite
   stats?: SuiteStats
   isAdmin: boolean
+  restricted: boolean
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
@@ -197,6 +233,11 @@ function SortableSuite({
               <span className={cn('text-xs px-1.5 py-0.5 rounded border font-medium', SUITE_TYPE_COLORS[suite.type ?? 'qa'])}>
                 {SUITE_TYPE_LABELS[suite.type ?? 'qa']}
               </span>
+              {restricted && (
+                <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-600 font-medium">
+                  <Lock className="w-3 h-3" /> 제한
+                </span>
+              )}
               {suite.version && <span className="text-xs text-slate-400">{suite.version}</span>}
             </div>
             {s && s.total > 0 && (
@@ -283,7 +324,7 @@ export default function HomePage() {
   const [loadingSuites, setLoadingSuites] = useState(false)
 
   const [productDialog, setProductDialog] = useState<ProductDialog | null>(null)
-  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '', areas: [] as string[] })
+  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '', areas: [] as string[], visibleRoles: [...VIEW_CONTROL_ROLES] as UserRole[] })
   const [areaInput, setAreaInput] = useState('')
   const areaComposing = useRef(false)
   const [productSaving, setProductSaving] = useState(false)
@@ -292,7 +333,7 @@ export default function HomePage() {
   const [suiteStats, setSuiteStats] = useState<Record<string, SuiteStats>>({})
 
   const [suiteDialog, setSuiteDialog] = useState<SuiteDialog | null>(null)
-  const [suiteForm, setSuiteForm] = useState({ name: '', version: '', type: 'qa' as SuiteType })
+  const [suiteForm, setSuiteForm] = useState({ name: '', version: '', type: 'qa' as SuiteType, visibleRoles: [...VIEW_CONTROL_ROLES] as UserRole[] })
   const [suiteSaving, setSuiteSaving] = useState(false)
   const [deleteSuite_, setDeleteSuite_] = useState<TestSuite | null>(null)
 
@@ -312,7 +353,8 @@ export default function HomePage() {
     try {
       const list = await getProducts()
       setProducts(list)
-      if (list.length > 0) setSelectedProduct((prev) => prev ?? list[0])
+      const firstVisible = list.find((p) => canViewByRole(p.visibleRoles, user?.role))
+      if (firstVisible) setSelectedProduct((prev) => prev ?? firstVisible)
     } finally { setLoadingProducts(false) }
   }
 
@@ -352,12 +394,12 @@ export default function HomePage() {
 
   // Product CRUD
   function openProductCreate() {
-    setProductForm({ name: '', description: '', jiraProjectKey: '', areas: [] })
+    setProductForm({ name: '', description: '', jiraProjectKey: '', areas: [], visibleRoles: [...VIEW_CONTROL_ROLES] })
     setAreaInput('')
     setProductDialog({ mode: 'create' })
   }
   function openProductEdit(p: Product) {
-    setProductForm({ name: p.name, description: p.description, jiraProjectKey: p.jiraProjectKey ?? '', areas: p.areas ?? [] })
+    setProductForm({ name: p.name, description: p.description, jiraProjectKey: p.jiraProjectKey ?? '', areas: p.areas ?? [], visibleRoles: p.visibleRoles ?? [...VIEW_CONTROL_ROLES] })
     setAreaInput('')
     setProductDialog({ mode: 'edit', target: p })
   }
@@ -398,11 +440,11 @@ export default function HomePage() {
 
   // Suite CRUD
   function openSuiteCreate() {
-    setSuiteForm({ name: '', version: '', type: 'qa' })
+    setSuiteForm({ name: '', version: '', type: 'qa', visibleRoles: [...VIEW_CONTROL_ROLES] })
     setSuiteDialog({ mode: 'create' })
   }
   function openSuiteEdit(s: TestSuite) {
-    setSuiteForm({ name: s.name, version: s.version, type: s.type ?? 'qa' })
+    setSuiteForm({ name: s.name, version: s.version, type: s.type ?? 'qa', visibleRoles: s.visibleRoles ?? [...VIEW_CONTROL_ROLES] })
     setSuiteDialog({ mode: 'edit', target: s })
   }
   async function handleSuiteSave() {
@@ -451,6 +493,10 @@ export default function HomePage() {
     }
   }
 
+  // 역할 기준 노출 필터 (admin/developer는 전체 노출)
+  const visibleProducts = products.filter((p) => canViewByRole(p.visibleRoles, user?.role))
+  const visibleSuites = suites.filter((s) => canViewByRole(s.visibleRoles, user?.role))
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
@@ -498,7 +544,7 @@ export default function HomePage() {
               <div className="space-y-1 px-2 pt-1">
                 {[1, 2, 3].map((i) => <div key={i} className="h-10 rounded bg-slate-100 animate-pulse" />)}
               </div>
-            ) : products.length === 0 ? (
+            ) : visibleProducts.length === 0 ? (
               <div className="text-center py-10 text-slate-400 text-sm px-4">
                 <Package className="w-7 h-7 mx-auto mb-2 opacity-30" />
                 {isAdmin
@@ -507,13 +553,14 @@ export default function HomePage() {
               </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProductDragEnd}>
-                <SortableContext items={products.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-                  {products.map((p) => (
+                <SortableContext items={visibleProducts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                  {visibleProducts.map((p) => (
                     <SortableProduct
                       key={p.id}
                       product={p}
                       selected={selectedProduct?.id === p.id}
                       isAdmin={isAdmin}
+                      restricted={isAdmin && isRoleRestricted(p.visibleRoles)}
                       onSelect={() => setSelectedProduct(p)}
                       onEdit={() => openProductEdit(p)}
                       onDelete={() => setDeleteProduct_(p)}
@@ -548,7 +595,7 @@ export default function HomePage() {
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-lg bg-slate-200 animate-pulse" />)}
               </div>
-            ) : suites.length === 0 ? (
+            ) : visibleSuites.length === 0 ? (
               <div className="text-center py-20 text-slate-400">
                 <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">묶음이 없습니다</p>
@@ -556,14 +603,15 @@ export default function HomePage() {
               </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSuiteDragEnd}>
-                <SortableContext items={suites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={visibleSuites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    {suites.map((s) => (
+                    {visibleSuites.map((s) => (
                       <SortableSuite
                         key={s.id}
                         suite={s}
                         stats={suiteStats[s.id]}
                         isAdmin={isAdmin}
+                        restricted={isAdmin && isRoleRestricted(s.visibleRoles)}
                         onOpen={() => navigate(`/products/${selectedProduct.id}/suites/${s.id}`)}
                         onEdit={() => openSuiteEdit(s)}
                         onDelete={() => setDeleteSuite_(s)}
@@ -629,6 +677,11 @@ export default function HomePage() {
                 </div>
               )}
             </div>
+
+            <VisibleRolesField
+              value={productForm.visibleRoles}
+              onChange={(roles) => setProductForm((f) => ({ ...f, visibleRoles: roles }))}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setProductDialog(null)}>취소</Button>
@@ -676,6 +729,11 @@ export default function HomePage() {
               <Input placeholder="예: v2.1.0" value={suiteForm.version}
                 onChange={(e) => setSuiteForm((f) => ({ ...f, version: e.target.value }))} />
             </div>
+
+            <VisibleRolesField
+              value={suiteForm.visibleRoles}
+              onChange={(roles) => setSuiteForm((f) => ({ ...f, visibleRoles: roles }))}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSuiteDialog(null)}>취소</Button>

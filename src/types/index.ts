@@ -24,6 +24,9 @@ export interface Product {
   areas: string[]
   order: number
   createdAt: string
+  // 역할별 노출 제어: undefined = 전체 공개(하위호환). 배열이면 해당 역할만 조회 가능
+  // (admin/developer는 항상 조회 가능)
+  visibleRoles?: UserRole[]
 }
 
 export interface TestSuite {
@@ -34,6 +37,9 @@ export interface TestSuite {
   type: SuiteType
   order: number
   createdAt: string
+  // 역할별 노출 제어: undefined = 전체 공개(하위호환). 배열이면 해당 역할만 조회 가능
+  // (admin/developer는 항상 조회 가능)
+  visibleRoles?: UserRole[]
 }
 
 export interface TestCase {

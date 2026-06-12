@@ -17,6 +17,7 @@ import type { IssueFormData } from '@/components/IssueForm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Sheet, SheetHeader, SheetBody, SheetFooter } from '@/components/ui/sheet'
 import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
+import { canViewByRole } from '@/lib/constants'
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
 import {
@@ -262,6 +263,14 @@ export default function TestCasesPage() {
       setLoading(false)
     }
   }
+
+  // 역할 노출 제어: 권한 없는 사용자가 URL로 직접 접근하면 홈으로 차단
+  useEffect(() => {
+    if (loading || !user) return
+    if (!product && !suite) return
+    const allowed = canViewByRole(product?.visibleRoles, user.role) && canViewByRole(suite?.visibleRoles, user.role)
+    if (!allowed) navigate('/', { replace: true })
+  }, [loading, user, product, suite, navigate])
 
   const isIssueSuite = suite?.type === 'dev'
 
