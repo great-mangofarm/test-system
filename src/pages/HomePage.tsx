@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ChangePasswordModal } from '@/components/ChangePasswordModal'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import {
   getProducts, createProduct, updateProduct, deleteProduct, reorderProducts,
   getSuites, createSuite, updateSuite, deleteSuite, reorderSuites, getSuiteStats,
@@ -185,11 +186,11 @@ function SortableProduct({
 
 // Sortable suite item
 function SortableSuite({
-  suite, stats, isAdmin, restricted, hidden, onOpen, onEdit, onDelete, onToggleHide,
+  suite, stats, canManage, restricted, hidden, onOpen, onEdit, onDelete, onToggleHide,
 }: {
   suite: TestSuite
   stats?: SuiteStats
-  isAdmin: boolean
+  canManage: boolean
   restricted: boolean
   hidden: boolean
   onOpen: () => void
@@ -198,7 +199,7 @@ function SortableSuite({
   onToggleHide: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: suite.id, disabled: !isAdmin })
+    useSortable({ id: suite.id, disabled: !canManage })
 
   const s = stats
 
@@ -209,14 +210,14 @@ function SortableSuite({
       className={cn(
         'group bg-white border rounded-xl px-4 py-4 hover:shadow-md transition-shadow cursor-pointer',
         isDragging && 'opacity-50 shadow-lg',
-        hidden && 'opacity-50 border-dashed'
+        hidden && 'opacity-70 border-dashed bg-slate-50/50'
       )}
       onClick={onOpen}
     >
       {/* 상단: 제목 + 도넛 차트 */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 min-w-0 flex-1">
-          {isAdmin && (
+          {canManage && (
             <span
               {...attributes}
               {...listeners}
@@ -239,6 +240,11 @@ function SortableSuite({
               {restricted && (
                 <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-600 font-medium">
                   <Lock className="w-3 h-3" /> 제한
+                </span>
+              )}
+              {hidden && (
+                <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-100 text-slate-500 font-medium">
+                  <EyeOff className="w-3 h-3" /> 숨김
                 </span>
               )}
               {suite.version && <span className="text-xs text-slate-400">{suite.version}</span>}
@@ -267,17 +273,14 @@ function SortableSuite({
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            className={cn(
-              'p-1.5 rounded hover:bg-slate-100 text-slate-400 transition-opacity',
-              hidden ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            )}
-            title={hidden ? '다시 보이기' : '내 화면에서 숨기기'}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400"
+            title={hidden ? '내 화면에 다시 표시' : '내 화면에서 숨기기'}
             onClick={(e) => { e.stopPropagation(); onToggleHide() }}
           >
             {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
-          {isAdmin && (
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+          {canManage && (
+            <div className="flex gap-0.5">
               <button className="p-1.5 rounded hover:bg-slate-100 text-slate-400"
                 onClick={(e) => { e.stopPropagation(); onEdit() }}>
                 <Pencil className="w-3.5 h-3.5" />
@@ -328,6 +331,8 @@ function SortableSuite({
 export default function HomePage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'developer'
+  // 묶음 생성/수정/삭제/순서변경은 관리자(admin)만 — 개발자(developer)는 불가
+  const canManageSuite = user?.role === 'admin'
   const navigate = useNavigate()
 
   const [products, setProducts] = useState<Product[]>([])
@@ -619,15 +624,14 @@ export default function HomePage() {
             <span className="text-sm font-semibold text-slate-600">
               {selectedProduct ? selectedProduct.name : '프로덕트를 선택하세요'}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {selectedProduct && hiddenCount > 0 && (
-                <Button variant="ghost" size="sm" className="text-slate-500" onClick={() => setShowHidden((v) => !v)}>
-                  {showHidden
-                    ? <><EyeOff className="w-4 h-4" /> 숨긴 묶음 가리기</>
-                    : <><Eye className="w-4 h-4" /> 숨긴 묶음 {hiddenCount}개 보기</>}
-                </Button>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <Switch checked={showHidden} onChange={setShowHidden} aria-label="숨긴 묶음 표시" />
+                  <span className="text-sm text-slate-500">숨긴 묶음 표시 ({hiddenCount})</span>
+                </label>
               )}
-              {isAdmin && selectedProduct && (
+              {canManageSuite && selectedProduct && (
                 <Button size="sm" onClick={openSuiteCreate}>
                   <Plus /> 묶음 추가
                 </Button>
@@ -649,7 +653,7 @@ export default function HomePage() {
               <div className="text-center py-20 text-slate-400">
                 <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">묶음이 없습니다</p>
-                {isAdmin && <Button className="mt-3" size="sm" onClick={openSuiteCreate}><Plus /> 묶음 추가</Button>}
+                {canManageSuite && <Button className="mt-3" size="sm" onClick={openSuiteCreate}><Plus /> 묶음 추가</Button>}
               </div>
             ) : displayedSuites.length === 0 ? (
               <div className="text-center py-20 text-slate-400">
@@ -668,7 +672,7 @@ export default function HomePage() {
                         key={s.id}
                         suite={s}
                         stats={suiteStats[s.id]}
-                        isAdmin={isAdmin}
+                        canManage={canManageSuite}
                         restricted={isAdmin && isRoleRestricted(s.visibleRoles)}
                         hidden={hiddenSuiteIds.has(s.id)}
                         onOpen={() => navigate(`/products/${selectedProduct.id}/suites/${s.id}`)}

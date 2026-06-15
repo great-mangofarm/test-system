@@ -61,7 +61,7 @@ export default function RegisterPage() {
             <UserPlus className="w-6 h-6 text-primary" />
           </div>
           <CardTitle className="text-2xl">계정 등록</CardTitle>
-          <CardDescription>등록 후 뷰어 권한으로 시작합니다</CardDescription>
+          <CardDescription>등록 후 스태프 권한으로 시작합니다</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

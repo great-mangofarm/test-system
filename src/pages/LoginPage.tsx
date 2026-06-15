@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { login, sendPasswordReset, useAuth } from '@/store/auth'
 import { Lock, Eye, EyeOff, ChevronLeft } from 'lucide-react'
 
@@ -122,18 +123,10 @@ export default function LoginPage() {
                   {loginError && <p className="text-sm text-destructive">{loginError}</p>}
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="remember"
-                      type="checkbox"
-                      className="w-4 h-4 accent-primary cursor-pointer"
-                      checked={remember}
-                      onChange={(e) => setRemember(e.target.checked)}
-                    />
-                    <Label htmlFor="remember" className="cursor-pointer font-normal text-slate-600">
-                      로그인 유지
-                    </Label>
-                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox checked={remember} onChange={setRemember} />
+                    <span className="font-normal text-sm text-slate-600">로그인 유지</span>
+                  </label>
                   <button
                     type="button"
                     className="text-xs text-slate-500 hover:text-primary hover:underline"
