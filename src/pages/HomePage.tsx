@@ -133,18 +133,18 @@ type SuiteDialog = { mode: 'create' | 'edit'; target?: TestSuite }
 
 // Sortable product item
 function SortableProduct({
-  product, selected, isAdmin, restricted, onSelect, onEdit, onDelete,
+  product, selected, canManage, restricted, onSelect, onEdit, onDelete,
 }: {
   product: Product
   selected: boolean
-  isAdmin: boolean
+  canManage: boolean
   restricted: boolean
   onSelect: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: product.id, disabled: !isAdmin })
+    useSortable({ id: product.id, disabled: !canManage })
 
   return (
     <div
@@ -157,7 +157,7 @@ function SortableProduct({
       )}
       onClick={onSelect}
     >
-      {isAdmin && (
+      {canManage && (
         <span
           {...attributes}
           {...listeners}
@@ -170,7 +170,7 @@ function SortableProduct({
       <Package className="w-4 h-4 shrink-0" />
       <span className="text-sm flex-1 truncate">{product.name}</span>
       {restricted && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
-      {isAdmin && (
+      {canManage && (
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
           <button className="p-0.5 rounded hover:bg-slate-200" onClick={(e) => { e.stopPropagation(); onEdit() }}>
             <Pencil className="w-3 h-3" />
@@ -331,7 +331,8 @@ function SortableSuite({
 export default function HomePage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'developer'
-  // 묶음 생성/수정/삭제/순서변경은 관리자(admin)만 — 개발자(developer)는 불가
+  // 프로덕트/묶음 생성·수정·삭제·순서변경은 관리자(admin)만 — 개발자(developer)는 불가
+  const canManageProduct = user?.role === 'admin'
   const canManageSuite = user?.role === 'admin'
   const navigate = useNavigate()
 
@@ -579,7 +580,7 @@ export default function HomePage() {
         <aside className="w-60 bg-white border-r flex flex-col shrink-0">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">프로덕트</span>
-            {isAdmin && (
+            {canManageProduct && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openProductCreate}>
                 <Plus className="w-3.5 h-3.5" />
               </Button>
@@ -593,7 +594,7 @@ export default function HomePage() {
             ) : visibleProducts.length === 0 ? (
               <div className="text-center py-10 text-slate-400 text-sm px-4">
                 <Package className="w-7 h-7 mx-auto mb-2 opacity-30" />
-                {isAdmin
+                {canManageProduct
                   ? <button className="text-primary hover:underline text-xs" onClick={openProductCreate}>+ 프로덕트 추가</button>
                   : '프로덕트가 없습니다'}
               </div>
@@ -605,7 +606,7 @@ export default function HomePage() {
                       key={p.id}
                       product={p}
                       selected={selectedProduct?.id === p.id}
-                      isAdmin={isAdmin}
+                      canManage={canManageProduct}
                       restricted={isAdmin && isRoleRestricted(p.visibleRoles)}
                       onSelect={() => setSelectedProduct(p)}
                       onEdit={() => openProductEdit(p)}

@@ -1,0 +1,41 @@
+// Firestore 보안 규칙 (원본 기록용)
+// ⚠️ 이 파일은 Vercel 배포로 반영되지 않습니다.
+//    변경 시 Firebase 콘솔 → Firestore Database → 규칙에 붙여넣고 [게시] 해야 적용됩니다.
+//
+// 권한 요약
+//  - products / suites : 생성·수정·삭제는 admin 전용 (구조 관리)
+//  - testcases(운영이슈/테스트케이스) : 생성·수정·삭제는 admin·developer
+//  - users : 본인 또는 admin
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function roleOf() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function signedIn()     { return request.auth != null; }
+    function isAdmin()      { return signedIn() && roleOf() == 'admin'; }
+    function isAdminOrDev() { return signedIn() && (roleOf() == 'admin' || roleOf() == 'developer'); }
+
+    match /users/{uid} {
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update, delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    match /products/{id} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /suites/{id} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /testcases/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdminOrDev();
+    }
+  }
+}
