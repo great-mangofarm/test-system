@@ -549,7 +549,7 @@ export default function HomePage() {
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
         <h1 className="text-xl font-bold text-slate-800">에버온 이슈트래커</h1>
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {user?.role === 'admin' && (
             <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
               <Users className="w-4 h-4" /> 사용자 관리
             </Button>
