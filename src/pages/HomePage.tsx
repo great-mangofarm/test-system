@@ -34,7 +34,7 @@ import { useAuth, logout, deleteAccount } from '@/store/auth'
 import type { Product, TestSuite, SuiteType, UserRole } from '@/types'
 import {
   Plus, Package, ClipboardList, ArrowRight, Pencil, Trash2,
-  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X, Lock,
+  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X, Lock, Eye, EyeOff,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -185,15 +185,17 @@ function SortableProduct({
 
 // Sortable suite item
 function SortableSuite({
-  suite, stats, isAdmin, restricted, onOpen, onEdit, onDelete,
+  suite, stats, isAdmin, restricted, hidden, onOpen, onEdit, onDelete, onToggleHide,
 }: {
   suite: TestSuite
   stats?: SuiteStats
   isAdmin: boolean
   restricted: boolean
+  hidden: boolean
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
+  onToggleHide: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: suite.id, disabled: !isAdmin })
@@ -206,7 +208,8 @@ function SortableSuite({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         'group bg-white border rounded-xl px-4 py-4 hover:shadow-md transition-shadow cursor-pointer',
-        isDragging && 'opacity-50 shadow-lg'
+        isDragging && 'opacity-50 shadow-lg',
+        hidden && 'opacity-50 border-dashed'
       )}
       onClick={onOpen}
     >
@@ -263,6 +266,16 @@ function SortableSuite({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            className={cn(
+              'p-1.5 rounded hover:bg-slate-100 text-slate-400 transition-opacity',
+              hidden ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            )}
+            title={hidden ? '다시 보이기' : '내 화면에서 숨기기'}
+            onClick={(e) => { e.stopPropagation(); onToggleHide() }}
+          >
+            {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
           {isAdmin && (
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
               <button className="p-1.5 rounded hover:bg-slate-100 text-slate-400"
@@ -340,7 +353,31 @@ export default function HomePage() {
   const [pwModalOpen, setPwModalOpen] = useState(false)
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
 
+  // 사용자별(기기별) 묶음 숨김 설정 — localStorage 저장
+  const [hiddenSuiteIds, setHiddenSuiteIds] = useState<Set<string>>(new Set())
+  const [showHidden, setShowHidden] = useState(false)
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  // 묶음 숨김 설정 로드 (사용자 uid별 키)
+  useEffect(() => {
+    if (!user?.uid) { setHiddenSuiteIds(new Set()); return }
+    try {
+      const raw = localStorage.getItem(`hiddenSuites:${user.uid}`)
+      setHiddenSuiteIds(new Set(raw ? (JSON.parse(raw) as string[]) : []))
+    } catch { setHiddenSuiteIds(new Set()) }
+  }, [user?.uid])
+
+  function toggleSuiteHidden(id: string) {
+    if (!user?.uid) return
+    setHiddenSuiteIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      localStorage.setItem(`hiddenSuites:${user.uid}`, JSON.stringify([...next]))
+      return next
+    })
+  }
 
   useEffect(() => { loadProducts() }, [])
   useEffect(() => {
@@ -497,6 +534,10 @@ export default function HomePage() {
   const visibleProducts = products.filter((p) => canViewByRole(p.visibleRoles, user?.role))
   const visibleSuites = suites.filter((s) => canViewByRole(s.visibleRoles, user?.role))
 
+  // 사용자별 숨김 필터 (역할 필터 통과분 중에서)
+  const hiddenCount = visibleSuites.filter((s) => hiddenSuiteIds.has(s.id)).length
+  const displayedSuites = showHidden ? visibleSuites : visibleSuites.filter((s) => !hiddenSuiteIds.has(s.id))
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
@@ -578,11 +619,20 @@ export default function HomePage() {
             <span className="text-sm font-semibold text-slate-600">
               {selectedProduct ? selectedProduct.name : '프로덕트를 선택하세요'}
             </span>
-            {isAdmin && selectedProduct && (
-              <Button size="sm" onClick={openSuiteCreate}>
-                <Plus /> 묶음 추가
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {selectedProduct && hiddenCount > 0 && (
+                <Button variant="ghost" size="sm" className="text-slate-500" onClick={() => setShowHidden((v) => !v)}>
+                  {showHidden
+                    ? <><EyeOff className="w-4 h-4" /> 숨긴 묶음 가리기</>
+                    : <><Eye className="w-4 h-4" /> 숨긴 묶음 {hiddenCount}개 보기</>}
+                </Button>
+              )}
+              {isAdmin && selectedProduct && (
+                <Button size="sm" onClick={openSuiteCreate}>
+                  <Plus /> 묶음 추가
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -601,20 +651,30 @@ export default function HomePage() {
                 <p className="text-sm">묶음이 없습니다</p>
                 {isAdmin && <Button className="mt-3" size="sm" onClick={openSuiteCreate}><Plus /> 묶음 추가</Button>}
               </div>
+            ) : displayedSuites.length === 0 ? (
+              <div className="text-center py-20 text-slate-400">
+                <EyeOff className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">모든 묶음을 숨겼습니다</p>
+                <Button className="mt-3" variant="outline" size="sm" onClick={() => setShowHidden(true)}>
+                  <Eye className="w-4 h-4" /> 숨긴 묶음 {hiddenCount}개 보기
+                </Button>
+              </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSuiteDragEnd}>
-                <SortableContext items={visibleSuites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={displayedSuites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    {visibleSuites.map((s) => (
+                    {displayedSuites.map((s) => (
                       <SortableSuite
                         key={s.id}
                         suite={s}
                         stats={suiteStats[s.id]}
                         isAdmin={isAdmin}
                         restricted={isAdmin && isRoleRestricted(s.visibleRoles)}
+                        hidden={hiddenSuiteIds.has(s.id)}
                         onOpen={() => navigate(`/products/${selectedProduct.id}/suites/${s.id}`)}
                         onEdit={() => openSuiteEdit(s)}
                         onDelete={() => setDeleteSuite_(s)}
+                        onToggleHide={() => toggleSuiteHidden(s.id)}
                       />
                     ))}
                   </div>

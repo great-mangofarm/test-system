@@ -4,11 +4,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
   developer: '개발자',
   staff: '스태프',
-  viewer: '뷰어',
 }
 
 // 노출 제어 대상 역할 (admin/developer는 항상 조회 가능하므로 제외)
-export const VIEW_CONTROL_ROLES: UserRole[] = ['staff', 'viewer']
+export const VIEW_CONTROL_ROLES: UserRole[] = ['staff']
 
 // 주어진 visibleRoles 설정에서 해당 역할이 항목을 볼 수 있는지 판단
 // - admin/developer: 항상 true (관리·편집 목적)

@@ -18,14 +18,12 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
   developer: '개발자',
   staff: '스태프',
-  viewer: '뷰어',
 }
 
 const ROLE_BADGE: Record<UserRole, string> = {
   admin: 'bg-red-100 text-red-700 border border-red-200',
   developer: 'bg-blue-100 text-blue-700 border border-blue-200',
   staff: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-  viewer: 'bg-slate-100 text-slate-600 border border-slate-200',
 }
 
 export default function AdminPage() {
@@ -48,6 +46,17 @@ export default function AdminPage() {
     try {
       const snap = await getDocs(collection(db, 'users'))
       const list = snap.docs.map((d) => d.data() as UserProfile)
+
+      // 레거시 'viewer' 역할 → 'staff' 자동 이관 (viewer 권한 폐지)
+      const legacyViewers = list.filter((u) => (u.role as string) === 'viewer')
+      if (legacyViewers.length > 0) {
+        await Promise.all(
+          legacyViewers.map((u) => updateDoc(doc(db, 'users', u.uid), { role: 'staff' }))
+        )
+        legacyViewers.forEach((u) => { u.role = 'staff' })
+        toast({ title: `뷰어 ${legacyViewers.length}명을 스태프로 이관했습니다` })
+      }
+
       list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       setUsers(list)
     } finally {
@@ -248,7 +257,6 @@ export default function AdminPage() {
                         <SelectItem value="admin">관리자</SelectItem>
                         <SelectItem value="developer">개발자</SelectItem>
                         <SelectItem value="staff">스태프</SelectItem>
-                        <SelectItem value="viewer">뷰어</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
