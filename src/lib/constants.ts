@@ -51,6 +51,7 @@ export const TEST_STATUS_COLORS: Record<TestStatus, string> = {
 export const PROCESSING_STATUS_LABELS: Record<ProcessingStatus, string> = {
   pending: '미처리',
   in_progress: '처리중',
+  dev_deploy_waiting: '개발배포대기',
   dev_deployed: '개발배포',
   resolved: '처리완료',
   wont_fix: '보류',
@@ -59,6 +60,7 @@ export const PROCESSING_STATUS_LABELS: Record<ProcessingStatus, string> = {
 export const PROCESSING_STATUS_COLORS: Record<ProcessingStatus, string> = {
   pending: 'bg-slate-200 text-slate-600',
   in_progress: 'bg-blue-600 text-white',
+  dev_deploy_waiting: 'bg-indigo-500 text-white',
   dev_deployed: 'bg-violet-500 text-white',
   resolved: 'bg-emerald-600 text-white',
   wont_fix: 'bg-slate-400 text-white',

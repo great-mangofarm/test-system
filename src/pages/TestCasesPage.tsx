@@ -884,7 +884,8 @@ export default function TestCasesPage() {
             <SelectItem value="all">전체</SelectItem>
             <SelectItem value="pending">미처리</SelectItem>
             <SelectItem value="in_progress">처리중</SelectItem>
-            <SelectItem value="dev_deployed">개발배포</SelectItem>
+            <SelectItem value="dev_deploy_waiting">개발배포대기</SelectItem>
+                            <SelectItem value="dev_deployed">개발배포</SelectItem>
             <SelectItem value="resolved">처리완료</SelectItem>
             <SelectItem value="wont_fix">보류</SelectItem>
           </SelectContent>
@@ -1110,6 +1111,7 @@ export default function TestCasesPage() {
                           <SelectContent>
                             <SelectItem value="pending">미처리</SelectItem>
                             <SelectItem value="in_progress">처리중</SelectItem>
+                            <SelectItem value="dev_deploy_waiting">개발배포대기</SelectItem>
                             <SelectItem value="dev_deployed">개발배포</SelectItem>
                             <SelectItem value="resolved">처리완료</SelectItem>
                             <SelectItem value="wont_fix">보류</SelectItem>
@@ -1270,7 +1272,8 @@ export default function TestCasesPage() {
                                         <SelectContent>
                                           <SelectItem value="pending">미처리</SelectItem>
                                           <SelectItem value="in_progress">처리중</SelectItem>
-                                          <SelectItem value="dev_deployed">개발배포</SelectItem>
+                                          <SelectItem value="dev_deploy_waiting">개발배포대기</SelectItem>
+                            <SelectItem value="dev_deployed">개발배포</SelectItem>
                                           <SelectItem value="resolved">처리완료</SelectItem>
                                           <SelectItem value="wont_fix">보류</SelectItem>
                                         </SelectContent>
@@ -1548,7 +1551,8 @@ export default function TestCasesPage() {
                                       <SelectContent>
                                         <SelectItem value="pending">미처리</SelectItem>
                                         <SelectItem value="in_progress">처리중</SelectItem>
-                                        <SelectItem value="dev_deployed">개발배포</SelectItem>
+                                        <SelectItem value="dev_deploy_waiting">개발배포대기</SelectItem>
+                            <SelectItem value="dev_deployed">개발배포</SelectItem>
                                         <SelectItem value="resolved">처리완료</SelectItem>
                                         <SelectItem value="wont_fix">보류</SelectItem>
                                       </SelectContent>
@@ -1744,7 +1748,8 @@ export default function TestCasesPage() {
                     <SelectContent>
                       <SelectItem value="pending">미처리</SelectItem>
                       <SelectItem value="in_progress">처리중</SelectItem>
-                      <SelectItem value="dev_deployed">개발배포</SelectItem>
+                      <SelectItem value="dev_deploy_waiting">개발배포대기</SelectItem>
+                            <SelectItem value="dev_deployed">개발배포</SelectItem>
                       <SelectItem value="resolved">처리완료</SelectItem>
                       <SelectItem value="wont_fix">보류</SelectItem>
                     </SelectContent>
