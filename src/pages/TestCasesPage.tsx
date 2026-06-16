@@ -299,6 +299,7 @@ export default function TestCasesPage() {
     fail: cases.filter((c) => c.status === 'fail').length,
     blocked: cases.filter((c) => c.status === 'blocked').length,
     notTested: cases.filter((c) => c.status === 'not_tested').length,
+    resolved: cases.filter((c) => c.processingStatus === 'resolved').length,
   }
 
   function toggleExpand(id: string) {
@@ -720,7 +721,10 @@ export default function TestCasesPage() {
     }
   }
 
-  const passRate = stats.total > 0 ? Math.round((stats.pass / stats.total) * 100) : 0
+  // 운영이슈 묶음은 '처리완료율', 테스트케이스 묶음은 '통과율'
+  const completionRate = stats.total > 0
+    ? Math.round(((isIssueSuite ? stats.resolved : stats.pass) / stats.total) * 100)
+    : 0
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -778,15 +782,24 @@ export default function TestCasesPage() {
       <div className="bg-white border-b px-8 py-2.5 shrink-0">
         <div className="flex items-center gap-6 text-sm">
           <span className="text-slate-500">전체 <strong className="text-slate-800">{stats.total}</strong></span>
-          <span className="text-green-700">통과 <strong>{stats.pass}</strong></span>
-          <span className="text-red-700">실패 <strong>{stats.fail}</strong></span>
-          <span className="text-orange-700">블로킹 <strong>{stats.blocked}</strong></span>
-          <span className="text-slate-500">미테스트 <strong>{stats.notTested}</strong></span>
+          {isIssueSuite ? (
+            <>
+              <span className="text-emerald-700">처리완료 <strong>{stats.resolved}</strong></span>
+              <span className="text-slate-500">미완료 <strong>{stats.total - stats.resolved}</strong></span>
+            </>
+          ) : (
+            <>
+              <span className="text-green-700">통과 <strong>{stats.pass}</strong></span>
+              <span className="text-red-700">실패 <strong>{stats.fail}</strong></span>
+              <span className="text-orange-700">블로킹 <strong>{stats.blocked}</strong></span>
+              <span className="text-slate-500">미테스트 <strong>{stats.notTested}</strong></span>
+            </>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <div className="w-32 h-2 rounded-full bg-slate-200 overflow-hidden">
-              <div className="h-full bg-green-500 transition-all" style={{ width: `${passRate}%` }} />
+              <div className={cn('h-full transition-all', isIssueSuite ? 'bg-emerald-500' : 'bg-green-500')} style={{ width: `${completionRate}%` }} />
             </div>
-            <span className="text-slate-600 font-medium text-sm">{passRate}%</span>
+            <span className="text-slate-600 font-medium text-sm">{completionRate}%</span>
           </div>
         </div>
       </div>

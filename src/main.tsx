@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-console.log('%c 이슈트래커 v1.0.24 ', 'background:#0ea5e9;color:#fff;font-weight:bold;border-radius:4px;padding:2px 6px;')
+console.log('%c 이슈트래커 v1.0.25 ', 'background:#0ea5e9;color:#fff;font-weight:bold;border-radius:4px;padding:2px 6px;')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

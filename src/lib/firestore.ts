@@ -111,6 +111,7 @@ export interface AreaStat {
   fail: number
   blocked: number
   notTested: number
+  resolved: number
 }
 
 export interface SuiteStats {
@@ -133,13 +134,14 @@ export async function getSuiteStats(suiteId: string): Promise<SuiteStats> {
   const areaMap = new Map<string, AreaStat>()
   for (const c of docs) {
     const key = c.area || '(미분류)'
-    if (!areaMap.has(key)) areaMap.set(key, { total: 0, pass: 0, fail: 0, blocked: 0, notTested: 0 })
+    if (!areaMap.has(key)) areaMap.set(key, { total: 0, pass: 0, fail: 0, blocked: 0, notTested: 0, resolved: 0 })
     const a = areaMap.get(key)!
     a.total++
     if (c.status === 'pass') a.pass++
     else if (c.status === 'fail') a.fail++
     else if (c.status === 'blocked') a.blocked++
     else a.notTested++
+    if (c.processingStatus === 'resolved') a.resolved++
   }
 
   return {

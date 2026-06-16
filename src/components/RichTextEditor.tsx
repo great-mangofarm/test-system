@@ -1,7 +1,7 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Bold, Italic, List, ListOrdered,
@@ -40,6 +40,9 @@ function ToolbarButton({
 }
 
 export function RichTextEditor({ value, onChange, placeholder, className, readOnly = false }: Props) {
+  // 에디터가 방금 emit한 값을 기억 → 내 입력으로 인한 value 변경엔 setContent 안 함
+  const lastEmitted = useRef<string | null>(null)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -53,16 +56,22 @@ export function RichTextEditor({ value, onChange, placeholder, className, readOn
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML()
-      onChange(html === '<p></p>' ? '' : html)
+      const out = html === '<p></p>' ? '' : html
+      lastEmitted.current = out
+      onChange(out)
     },
   })
 
-  // 외부에서 value 변경 시 동기화 (초기 로딩 등)
+  // 외부에서 value가 바뀔 때만 동기화 (초기 로딩/다른 레코드 열기 등).
+  // 내 타이핑으로 인한 변경(== lastEmitted)은 건너뛰어 한글 IME 조합이 깨지지 않게 함.
   useEffect(() => {
     if (!editor) return
+    if (value === lastEmitted.current) return
     const current = editor.getHTML()
-    if (current !== value && value !== undefined) {
-      editor.commands.setContent(value || '')
+    const normalizedCurrent = current === '<p></p>' ? '' : current
+    if (normalizedCurrent !== (value ?? '')) {
+      // emitUpdate:false → 동기화가 다시 onChange를 트리거하지 않도록
+      editor.commands.setContent(value || '', { emitUpdate: false })
     }
   }, [value, editor])
 

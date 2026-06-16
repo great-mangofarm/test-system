@@ -77,13 +77,14 @@ const SUITE_TYPE_COLORS: Record<SuiteType, string> = {
   dev: 'bg-orange-50 text-orange-600 border-orange-100',
 }
 
-function DonutChart({ stats }: { stats: SuiteStats }) {
-  const { pass, fail, blocked, notTested, total } = stats
+function DonutChart({ stats, isIssue = false }: { stats: SuiteStats; isIssue?: boolean }) {
+  const { pass, fail, blocked, notTested, total, resolved } = stats
   const size = 88
   const cx = size / 2, cy = size / 2
   const r = 34
   const circ = 2 * Math.PI * r
-  const passRate = total > 0 ? Math.round((pass / total) * 100) : 0
+  // 운영이슈 묶음은 '처리완료율', 그 외는 '통과율'
+  const rate = total > 0 ? Math.round(((isIssue ? resolved : pass) / total) * 100) : 0
 
   if (total === 0) {
     return (
@@ -94,12 +95,18 @@ function DonutChart({ stats }: { stats: SuiteStats }) {
     )
   }
 
-  const segments = [
-    { value: pass, color: '#22c55e' },
-    { value: fail, color: '#ef4444' },
-    { value: blocked, color: '#f97316' },
-    { value: notTested, color: '#e2e8f0' },
-  ]
+  // 운영이슈: 처리완료 vs 미완료 2분할
+  const segments = isIssue
+    ? [
+        { value: resolved, color: '#10b981' },
+        { value: total - resolved, color: '#e2e8f0' },
+      ]
+    : [
+        { value: pass, color: '#22c55e' },
+        { value: fail, color: '#ef4444' },
+        { value: blocked, color: '#f97316' },
+        { value: notTested, color: '#e2e8f0' },
+      ]
 
   let cumulative = 0
   return (
@@ -122,8 +129,8 @@ function DonutChart({ stats }: { stats: SuiteStats }) {
           />
         )
       })}
-      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="15" fontWeight="700" fill="#334155">{passRate}%</text>
-      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">통과율</text>
+      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="15" fontWeight="700" fill="#334155">{rate}%</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">{isIssue ? '처리완료' : '통과율'}</text>
     </svg>
   )
 }
@@ -202,6 +209,7 @@ function SortableSuite({
     useSortable({ id: suite.id, disabled: !canManage })
 
   const s = stats
+  const isIssue = suite.type === 'dev'  // 운영이슈 묶음: 통계 기준이 '처리완료'
 
   return (
     <div
@@ -252,21 +260,32 @@ function SortableSuite({
             {s && s.total > 0 && (
               <p className="text-xs text-slate-400 mt-1">
                 처리완료 <span className="font-semibold text-slate-600">{s.resolved}</span> / 전체 <span className="font-semibold text-slate-600">{s.total}</span>
-                <span className="mx-1.5 text-slate-200">|</span>
-                통과 <span className="font-semibold text-green-600">{s.pass}</span>
-                {s.fail > 0 && <> · 실패 <span className="font-semibold text-red-500">{s.fail}</span></>}
-                {s.blocked > 0 && <> · 블로킹 <span className="font-semibold text-orange-500">{s.blocked}</span></>}
+                {!isIssue && (
+                  <>
+                    <span className="mx-1.5 text-slate-200">|</span>
+                    통과 <span className="font-semibold text-green-600">{s.pass}</span>
+                    {s.fail > 0 && <> · 실패 <span className="font-semibold text-red-500">{s.fail}</span></>}
+                    {s.blocked > 0 && <> · 블로킹 <span className="font-semibold text-orange-500">{s.blocked}</span></>}
+                  </>
+                )}
               </p>
             )}
             {s && s.total === 0 && <p className="text-xs text-slate-300 mt-1">항목 없음</p>}
 
             {/* 전체 상태 바 */}
             {s && s.total > 0 && (
-              <div className="flex h-1.5 rounded-full overflow-hidden mt-2 gap-px">
-                {s.pass > 0 && <div className="bg-green-500" style={{ flex: s.pass }} />}
-                {s.fail > 0 && <div className="bg-red-400" style={{ flex: s.fail }} />}
-                {s.blocked > 0 && <div className="bg-orange-400" style={{ flex: s.blocked }} />}
-                {s.notTested > 0 && <div className="bg-slate-200" style={{ flex: s.notTested }} />}
+              <div className="flex h-1.5 rounded-full overflow-hidden mt-2 gap-px bg-slate-100">
+                {isIssue ? (
+                  s.resolved > 0 && <div className="bg-emerald-500" style={{ flex: s.resolved }} />
+                ) : (
+                  <>
+                    {s.pass > 0 && <div className="bg-green-500" style={{ flex: s.pass }} />}
+                    {s.fail > 0 && <div className="bg-red-400" style={{ flex: s.fail }} />}
+                    {s.blocked > 0 && <div className="bg-orange-400" style={{ flex: s.blocked }} />}
+                    {s.notTested > 0 && <div className="bg-slate-200" style={{ flex: s.notTested }} />}
+                  </>
+                )}
+                {isIssue && s.total - s.resolved > 0 && <div className="bg-slate-200" style={{ flex: s.total - s.resolved }} />}
               </div>
             )}
           </div>
@@ -291,7 +310,7 @@ function SortableSuite({
               </button>
             </div>
           )}
-          {s ? <DonutChart stats={s} /> : <div className="w-[88px] h-[88px] rounded-full border-[10px] border-slate-100 animate-pulse" />}
+          {s ? <DonutChart stats={s} isIssue={isIssue} /> : <div className="w-[88px] h-[88px] rounded-full border-[10px] border-slate-100 animate-pulse" />}
           <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
         </div>
       </div>
@@ -302,21 +321,28 @@ function SortableSuite({
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">영역별 진행도</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2.5">
             {s.areas.map((area) => {
-              const pct = area.total > 0 ? Math.round((area.pass / area.total) * 100) : 0
+              const done = isIssue ? area.resolved : area.pass
+              const pct = area.total > 0 ? Math.round((done / area.total) * 100) : 0
               return (
                 <div key={area.name}>
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-xs text-slate-600 truncate max-w-[55%]">{area.name}</span>
                     <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-1">
                       <span className="font-medium text-slate-600">{pct}%</span>
-                      {area.fail > 0 && <span className="text-red-400">·{area.fail}실패</span>}
-                      {area.blocked > 0 && <span className="text-orange-400">·{area.blocked}블</span>}
+                      {!isIssue && area.fail > 0 && <span className="text-red-400">·{area.fail}실패</span>}
+                      {!isIssue && area.blocked > 0 && <span className="text-orange-400">·{area.blocked}블</span>}
                     </span>
                   </div>
                   <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
-                    {area.pass > 0 && <div className="bg-green-500" style={{ width: `${(area.pass / area.total) * 100}%` }} />}
-                    {area.fail > 0 && <div className="bg-red-400" style={{ width: `${(area.fail / area.total) * 100}%` }} />}
-                    {area.blocked > 0 && <div className="bg-orange-400" style={{ width: `${(area.blocked / area.total) * 100}%` }} />}
+                    {isIssue ? (
+                      area.resolved > 0 && <div className="bg-emerald-500" style={{ width: `${(area.resolved / area.total) * 100}%` }} />
+                    ) : (
+                      <>
+                        {area.pass > 0 && <div className="bg-green-500" style={{ width: `${(area.pass / area.total) * 100}%` }} />}
+                        {area.fail > 0 && <div className="bg-red-400" style={{ width: `${(area.fail / area.total) * 100}%` }} />}
+                        {area.blocked > 0 && <div className="bg-orange-400" style={{ width: `${(area.blocked / area.total) * 100}%` }} />}
+                      </>
+                    )}
                   </div>
                 </div>
               )
