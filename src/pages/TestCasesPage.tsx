@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,10 +17,10 @@ import { RichTextEditor } from '@/components/RichTextEditor'
 import type { IssueFormData } from '@/components/IssueForm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Sheet, SheetHeader, SheetBody, SheetFooter } from '@/components/ui/sheet'
-import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers } from '@/lib/firestore'
+import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers, getDeployBatches, createDeployBatch, updateDeployBatch, deleteDeployBatch } from '@/lib/firestore'
 import { canViewByRole } from '@/lib/constants'
 import { useAuth } from '@/store/auth'
-import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile } from '@/types'
+import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile, DeployBatch } from '@/types'
 import {
   PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_LABELS, TEST_STATUS_COLORS,
   PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
@@ -188,6 +189,13 @@ export default function TestCasesPage() {
   const [inlineEditId, setInlineEditId] = useState<string | null>(null)
   const [inlineForm, setInlineForm] = useState<Partial<TestCase>>({})
 
+  // 배포묶음 (운영이슈 전용)
+  const [batches, setBatches] = useState<DeployBatch[]>([])
+  const [batchFilter, setBatchFilter] = useState<string>('all') // 'all' | batchId | '__none__'
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false)
+  const [batchForm, setBatchForm] = useState({ name: '', deployDate: '' })
+  const [deleteBatchTarget, setDeleteBatchTarget] = useState<DeployBatch | null>(null)
+
   // Filters
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterProcessing, setFilterProcessing] = useState('all')
@@ -212,13 +220,14 @@ export default function TestCasesPage() {
     const timer = setInterval(async () => {
       if (!productId || !suiteId) return
       try {
-        const [prods, suitesData, casesData, usersData] = await Promise.all([
-          getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(),
+        const [prods, suitesData, casesData, usersData, batchesData] = await Promise.all([
+          getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(), getDeployBatches(suiteId),
         ])
         setProduct(prods.find((p) => p.id === productId) ?? null)
         setSuite(suitesData.find((s) => s.id === suiteId) ?? null)
         setCases(casesData)
         setUsers(usersData)
+        setBatches(batchesData)
       } catch { /* 백그라운드 실패는 무시 */ }
     }, 60000)
     return () => clearInterval(timer)
@@ -252,16 +261,45 @@ export default function TestCasesPage() {
     if (!productId || !suiteId) return
     setLoading(true)
     try {
-      const [prods, suitesData, casesData, usersData] = await Promise.all([
-        getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(),
+      const [prods, suitesData, casesData, usersData, batchesData] = await Promise.all([
+        getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(), getDeployBatches(suiteId),
       ])
       setProduct(prods.find((p) => p.id === productId) ?? null)
       setSuite(suitesData.find((s) => s.id === suiteId) ?? null)
       setCases(casesData)
       setUsers(usersData)
+      setBatches(batchesData)
     } finally {
       setLoading(false)
     }
+  }
+
+  // --- 배포묶음 관리 ---
+  async function handleCreateBatch(name: string, deployDate: string) {
+    if (!suiteId) return
+    const id = await createDeployBatch({ suiteId, name: name.trim(), deployDate, status: 'planned' }, batches.length)
+    setBatches(await getDeployBatches(suiteId))
+    toast({ title: '배포묶음이 생성되었습니다' })
+    return id
+  }
+  async function handleToggleBatchStatus(batch: DeployBatch) {
+    const next: DeployBatch['status'] = batch.status === 'planned' ? 'deployed' : 'planned'
+    await updateDeployBatch(batch.id, { status: next })
+    setBatches((prev) => prev.map((b) => b.id === batch.id ? { ...b, status: next } : b))
+    toast({ title: next === 'deployed' ? '배포완료 처리됨' : '배포예정으로 변경됨' })
+  }
+  async function handleDeleteBatch(batch: DeployBatch) {
+    await deleteDeployBatch(batch.id)
+    // 해당 묶음에 속한 이슈들의 배정 해제
+    const affected = cases.filter((c) => c.deployBatchId === batch.id)
+    await Promise.all(affected.map((c) => updateTestCase(c.id, { deployBatchId: '' })))
+    setCases((prev) => prev.map((c) => c.deployBatchId === batch.id ? { ...c, deployBatchId: '' } : c))
+    setBatches((prev) => prev.filter((b) => b.id !== batch.id))
+    toast({ title: '배포묶음이 삭제되었습니다' })
+  }
+  async function assignBatch(tcId: string, batchId: string) {
+    await updateTestCase(tcId, { deployBatchId: batchId })
+    setCases((prev) => prev.map((c) => c.id === tcId ? { ...c, deployBatchId: batchId } : c))
   }
 
   // 역할 노출 제어: 권한 없는 사용자가 URL로 직접 접근하면 홈으로 차단
@@ -287,11 +325,29 @@ export default function TestCasesPage() {
     if (filterProcessing !== 'all' && c.processingStatus !== filterProcessing) return false
     if (filterArea !== 'all' && c.area !== filterArea) return false
     if (filterDeveloper !== 'all' && c.assignedDeveloper !== filterDeveloper) return false
+    if (isIssueSuite && batchFilter !== 'all') {
+      if (batchFilter === '__none__' ? !!c.deployBatchId : c.deployBatchId !== batchFilter) return false
+    }
     if (dateFrom && c.createdAt.slice(0, 10) < dateFrom) return false
     if (dateTo && c.createdAt.slice(0, 10) > dateTo) return false
     if (search && !c.title.toLowerCase().includes(search.toLowerCase()) && !c.area.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
+
+  // 배포묶음별 그룹핑 (운영이슈 전용). 배포묶음 순서 → 미지정 마지막
+  const groupedByBatch: Array<{ batch: DeployBatch | null; items: TestCase[] }> = (() => {
+    if (!isIssueSuite) return []
+    const groups = batches.map((b) => ({ batch: b as DeployBatch | null, items: filtered.filter((c) => c.deployBatchId === b.id) }))
+    const unassigned = filtered.filter((c) => !c.deployBatchId || !batches.some((b) => b.id === c.deployBatchId))
+    groups.push({ batch: null, items: unassigned })
+    return groups.filter((g) => g.items.length > 0)
+  })()
+
+  // 렌더할 행 목록: 운영이슈는 그룹 첫 행에 헤더 정보를 부착
+  const rowsToRender: Array<{ tc: TestCase; header: { batch: DeployBatch | null; count: number } | null }> =
+    isIssueSuite
+      ? groupedByBatch.flatMap((g) => g.items.map((tc, i) => ({ tc, header: i === 0 ? { batch: g.batch, count: g.items.length } : null })))
+      : filtered.map((tc) => ({ tc, header: null }))
 
   const stats = {
     total: cases.length,
@@ -851,6 +907,24 @@ export default function TestCasesPage() {
             </SelectContent>
           </Select>
         )}
+        {isIssueSuite && (
+          <>
+            <Select value={batchFilter} onValueChange={setBatchFilter}>
+              <SelectTrigger className="w-40 h-8 text-sm"><SelectValue placeholder="배포묶음" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 배포묶음</SelectItem>
+                {batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.status === 'deployed' ? '✅ ' : '🗓 '}{b.name}</SelectItem>)}
+                <SelectItem value="__none__">미지정</SelectItem>
+              </SelectContent>
+            </Select>
+            {canEditStatus && (
+              <Button variant="outline" size="sm" className="h-8 text-xs"
+                onClick={() => { setBatchForm({ name: '', deployDate: '' }); setBatchDialogOpen(true) }}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> 배포묶음
+              </Button>
+            )}
+          </>
+        )}
         <div className="flex items-center gap-1 text-sm text-slate-500">
           <span className="text-xs">등록일</span>
           <input
@@ -922,8 +996,45 @@ export default function TestCasesPage() {
               )}
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
-              {filtered.map((tc) => (
+              {rowsToRender.map(({ tc, header }) => (
                 <Fragment key={tc.id}>
+                  {/* 배포묶음 그룹 헤더 */}
+                  {header && (
+                    <tr className="bg-slate-50/80 border-t-2 border-slate-200">
+                      <td colSpan={9} className="px-4 py-2">
+                        <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                          {header.batch ? (
+                            <>
+                              <span className={cn('text-xs px-2 py-0.5 rounded-full font-semibold',
+                                header.batch.status === 'deployed' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700')}>
+                                {header.batch.status === 'deployed' ? '배포완료' : '배포예정'}
+                              </span>
+                              <span className="text-sm font-bold text-slate-700">📦 {header.batch.name}</span>
+                              {header.batch.deployDate && <span className="text-xs text-slate-500">· {header.batch.deployDate}</span>}
+                              <span className="text-xs text-slate-400">· {header.count}건</span>
+                              {canEditStatus && (
+                                <div className="flex items-center gap-1 ml-2">
+                                  <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-slate-500"
+                                    onClick={() => handleToggleBatchStatus(header.batch!)}>
+                                    {header.batch.status === 'deployed' ? '배포예정으로' : '배포완료 처리'}
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-destructive"
+                                    onClick={() => setDeleteBatchTarget(header.batch!)}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-sm font-bold text-slate-500">미지정</span>
+                              <span className="text-xs text-slate-400">· {header.count}건</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {/* Main Row */}
                   <tr
                     id={tc.id}
@@ -1650,6 +1761,20 @@ export default function TestCasesPage() {
                     value={(f.dueDate as string) ?? ''} onChange={(e) => setF('dueDate', e.target.value)} readOnly={!isAdmin} />
                 </div>
                 <div className="col-span-2">
+                  <p className="text-xs text-slate-400 mb-1">배포묶음</p>
+                  {canEditStatus ? (
+                    <Select value={tc.deployBatchId || '__none__'} onValueChange={(v) => assignBatch(tc.id, v === '__none__' ? '' : v)}>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="미지정" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">미지정</SelectItem>
+                        {batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.status === 'deployed' ? '✅ ' : '🗓 '}{b.name}{b.deployDate ? ` (${b.deployDate})` : ''}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium text-slate-700">{batches.find((b) => b.id === tc.deployBatchId)?.name ?? '미지정'}</p>
+                  )}
+                </div>
+                <div className="col-span-2">
                   <p className="text-xs text-slate-400 mb-1">Jira 티켓</p>
                   <div className="flex items-center gap-2">
                     <Input className="h-8 text-sm flex-1" placeholder="https://..." value={(f.ticketLink as string) ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
@@ -1790,6 +1915,54 @@ export default function TestCasesPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 배포묶음 생성 다이얼로그 */}
+      <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>새 배포묶음</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>이름 *</Label>
+              <Input placeholder="예: 6/17 정기배포" value={batchForm.name}
+                onChange={(e) => setBatchForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
+            </div>
+            <div className="space-y-2">
+              <Label>배포 예정일</Label>
+              <input type="date" className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={batchForm.deployDate} onChange={(e) => setBatchForm((f) => ({ ...f, deployDate: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>취소</Button>
+            <Button disabled={!batchForm.name.trim()}
+              onClick={async () => { await handleCreateBatch(batchForm.name, batchForm.deployDate); setBatchDialogOpen(false) }}>
+              생성
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 배포묶음 삭제 확인 */}
+      <AlertDialog open={!!deleteBatchTarget} onOpenChange={(o) => { if (!o) setDeleteBatchTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>배포묶음 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleteBatchTarget?.name}" 배포묶음을 삭제하시겠습니까? 묶음에 속한 이슈는 삭제되지 않고 '미지정'으로 돌아갑니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteBatchTarget) handleDeleteBatch(deleteBatchTarget); setDeleteBatchTarget(null) }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               삭제
             </AlertDialogAction>
           </AlertDialogFooter>

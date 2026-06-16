@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Product, TestSuite, TestCase, UserProfile } from '@/types'
+import type { Product, TestSuite, TestCase, UserProfile, DeployBatch } from '@/types'
 
 // --- Users ---
 export async function getUsers(): Promise<UserProfile[]> {
@@ -71,6 +71,34 @@ export async function updateSuite(id: string, data: Partial<TestSuite>): Promise
 
 export async function deleteSuite(id: string): Promise<void> {
   await deleteDoc(doc(db, 'suites', id))
+}
+
+// --- Deploy Batches (배포묶음) ---
+export async function getDeployBatches(suiteId: string): Promise<DeployBatch[]> {
+  const snap = await getDocs(
+    query(collection(db, 'deployBatches'), where('suiteId', '==', suiteId))
+  )
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as DeployBatch))
+  // 예정일 내림차순(최근 배포가 위), 동일하면 order
+  return docs.sort((a, b) =>
+    (b.deployDate ?? '').localeCompare(a.deployDate ?? '') || (a.order ?? 0) - (b.order ?? 0)
+  )
+}
+
+export async function createDeployBatch(
+  data: Omit<DeployBatch, 'id' | 'createdAt' | 'order'>,
+  order: number
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'deployBatches'), { ...data, order, createdAt: new Date().toISOString() })
+  return ref.id
+}
+
+export async function updateDeployBatch(id: string, data: Partial<DeployBatch>): Promise<void> {
+  await updateDoc(doc(db, 'deployBatches', id), data)
+}
+
+export async function deleteDeployBatch(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'deployBatches', id))
 }
 
 // --- Test Cases ---

@@ -29,6 +29,18 @@ export interface Product {
   visibleRoles?: UserRole[]
 }
 
+export type DeployBatchStatus = 'planned' | 'deployed'
+
+export interface DeployBatch {
+  id: string
+  suiteId: string
+  name: string
+  deployDate: string   // YYYY-MM-DD (예정/배포일)
+  status: DeployBatchStatus
+  order: number
+  createdAt: string
+}
+
 export interface TestSuite {
   id: string
   productId: string
@@ -76,4 +88,5 @@ export interface TestCase {
   devChangelog?: string     // 개발 변경 내역 (개발자 작성)
   testChecklist?: Array<{ text: string; checked: boolean }> // 테스트 체크리스트
   testProgressNote?: string // 테스트 진행사항
+  deployBatchId?: string    // 배포묶음 ID (운영이슈 전용)
 }
