@@ -11,6 +11,7 @@ import {
 interface Props {
   value: string
   onChange: (html: string) => void
+  onBlur?: (html: string) => void
   placeholder?: string
   className?: string
   readOnly?: boolean
@@ -39,7 +40,7 @@ function ToolbarButton({
   )
 }
 
-export function RichTextEditor({ value, onChange, placeholder, className, readOnly = false }: Props) {
+export function RichTextEditor({ value, onChange, onBlur, placeholder, className, readOnly = false }: Props) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -54,6 +55,11 @@ export function RichTextEditor({ value, onChange, placeholder, className, readOn
     onUpdate: ({ editor }) => {
       const html = editor.getHTML()
       onChange(html === '<p></p>' ? '' : html)
+    },
+    onBlur: ({ editor }) => {
+      if (!onBlur) return
+      const html = editor.getHTML()
+      onBlur(html === '<p></p>' ? '' : html)
     },
   })
 

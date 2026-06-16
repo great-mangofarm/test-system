@@ -1712,10 +1712,16 @@ export default function TestCasesPage() {
               {/* 개발 변경 내역 (full width) */}
               <div>
                 <p className="text-xs text-blue-500 font-medium mb-1">개발 변경 내역</p>
-                <RichTextEditor value={tc.devChangelog ?? ''} onChange={async (v) => {
-                  await updateTestCase(tc.id, { devChangelog: v })
-                  setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, devChangelog: v } : c))
-                }} placeholder="개발 변경 내역을 입력하세요..." readOnly={!canEditStatus} className="[&_.tiptap]:min-h-[100px]" />
+                <RichTextEditor
+                  value={tc.devChangelog ?? ''}
+                  onChange={() => { /* 타이핑 중엔 저장하지 않음 — blur 시 1회 저장 */ }}
+                  onBlur={async (v) => {
+                    if (v === (tc.devChangelog ?? '')) return
+                    await updateTestCase(tc.id, { devChangelog: v })
+                    setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, devChangelog: v } : c))
+                    toast({ title: '개발 변경 내역 저장됨' })
+                  }}
+                  placeholder="개발 변경 내역을 입력하세요..." readOnly={!canEditStatus} className="[&_.tiptap]:min-h-[100px]" />
               </div>
 
               {/* 첨부 이미지 */}
