@@ -210,7 +210,7 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
         <div className="flex gap-6 items-start">
 
           {/* 왼쪽: 개요 + 기능/화면 정의 */}
-          <div className="flex-1 space-y-4">
+          <div className="flex-1 min-w-0 space-y-4">
             <div className="space-y-1.5">
               <Label>개요 (프로젝트 배경 / 개발 목적)</Label>
               <RichTextEditor
@@ -232,7 +232,7 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
           </div>
 
           {/* 오른쪽: 범위및요구사항 + 체크리스트 */}
-          <div className="flex-1 space-y-4">
+          <div className="flex-1 min-w-0 space-y-4">
             <div className="space-y-1.5">
               <Label>범위 및 요구사항</Label>
               <RichTextEditor

@@ -79,7 +79,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
     return (
       <div
         className={cn(
-          'prose prose-sm max-w-none text-slate-700 leading-relaxed',
+          'prose prose-sm max-w-none text-slate-700 leading-relaxed break-words [overflow-wrap:anywhere]',
           'prose-headings:font-semibold prose-headings:text-slate-800',
           'prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5',
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
@@ -163,6 +163,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           'prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5',
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
           '[&_.tiptap]:outline-none [&_.tiptap]:min-h-[100px]',
+          '[&_.tiptap]:break-words [&_.tiptap]:[overflow-wrap:anywhere]',
           '[&_.tiptap_ul]:list-disc [&_.tiptap_ul]:pl-5 [&_.tiptap_ul]:my-1',
           '[&_.tiptap_ol]:list-decimal [&_.tiptap_ol]:pl-5 [&_.tiptap_ol]:my-1',
           '[&_.tiptap_li]:my-0.5',
