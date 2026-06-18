@@ -20,7 +20,15 @@ service cloud.firestore {
     match /users/{uid} {
       allow read:   if signedIn();
       allow create: if signedIn() && request.auth.uid == uid;
-      allow update, delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+      // 본인 문서는 수정 가능하되 role/uid/email은 변경 금지 (권한 승격 차단). role 변경은 admin만.
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (request.auth.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email)
+      );
+      allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
     }
 
     match /products/{id} {
