@@ -208,25 +208,25 @@ export default function TestCasesPage() {
 
   useEffect(() => { load() }, [productId, suiteId])
 
-  // 탭 포커스 시 자동 갱신
+  // 편집 중에는 자동 갱신이 입력을 덮어쓰지 않도록 가드 (current는 drawerTcId 선언 후 설정)
+  const editingRef = useRef(false)
+
+  // 탭 포커스 시 자동 갱신 (편집 중이면 스킵)
   useEffect(() => {
-    function onFocus() { load() }
+    function onFocus() { if (!editingRef.current) load() }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [productId, suiteId])
 
-  // 60초마다 로딩 표시 없이 조용히 목록 갱신
+  // 60초마다 조용히 갱신 — 자주 바뀌는 testcases/deployBatches만, 편집 중이면 스킵
   useEffect(() => {
     const timer = setInterval(async () => {
-      if (!productId || !suiteId) return
+      if (!productId || !suiteId || editingRef.current) return
       try {
-        const [prods, suitesData, casesData, usersData, batchesData] = await Promise.all([
-          getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(), getDeployBatches(suiteId),
+        const [casesData, batchesData] = await Promise.all([
+          getTestCases(suiteId), getDeployBatches(suiteId),
         ])
-        setProduct(prods.find((p) => p.id === productId) ?? null)
-        setSuite(suitesData.find((s) => s.id === suiteId) ?? null)
         setCases(casesData)
-        setUsers(usersData)
         setBatches(batchesData)
       } catch { /* 백그라운드 실패는 무시 */ }
     }, 60000)
@@ -610,6 +610,8 @@ export default function TestCasesPage() {
   const [issueImageUploading, setIssueImageUploading] = useState<string | null>(null)
   const [drawerTcId, setDrawerTcId] = useState<string | null>(null)
   const drawerTc = cases.find((c) => c.id === drawerTcId) ?? null
+  // 자동 갱신 가드: 인라인 편집/드로어 열림 중이면 백그라운드 새로고침 스킵
+  editingRef.current = !!(inlineEditId || drawerTcId)
 
   function openDrawer(id: string) {
     setDrawerTcId(id)

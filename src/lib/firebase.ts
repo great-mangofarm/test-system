@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import { initializeFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getAuth } from 'firebase/auth'
 
@@ -13,7 +13,8 @@ const firebaseConfig = {
 }
 
 const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
+// ignoreUndefinedProperties: 폼 상태에 undefined가 섞여도 쓰기 전체가 실패하지 않도록
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true })
 export const storage = getStorage(app)
 // Firebase 브라우저 기본값이 browserLocalPersistence — 별도 setPersistence 불필요
 export const auth = getAuth(app)
