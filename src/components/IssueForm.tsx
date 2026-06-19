@@ -184,6 +184,8 @@ export function IssueForm({ initial, users = [], areas, batches = [], jiraProjec
               <SelectContent>
                 <SelectItem value="pending">미처리</SelectItem>
                 <SelectItem value="in_progress">처리중</SelectItem>
+                <SelectItem value="dev_deploy_waiting">개발배포대기</SelectItem>
+                <SelectItem value="dev_deployed">개발배포</SelectItem>
                 <SelectItem value="resolved">처리완료</SelectItem>
                 <SelectItem value="wont_fix">보류</SelectItem>
               </SelectContent>

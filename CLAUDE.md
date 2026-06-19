@@ -26,14 +26,15 @@
 | 서버리스 | Vercel API Routes (`/api/*.ts`) |
 | 이슈 연동 | Jira REST API + ADF (Atlassian Document Format) |
 | 에디터 | Tiptap (`@tiptap/react`, `@tiptap/starter-kit`) |
-| 배포 | Vercel (`npx vercel --prod`) |
+| 배포 | Vercel — `git push`로 자동 배포(GitHub 연동). 프리뷰는 브랜치 push |
 
 ---
 
 ## 현재 버전
 
-**v1.0.18** (배포 완료)
-> v1.0.19는 아직 미배포 — `개발배포` 처리상태 추가 + 권한 개편 변경이 로컬에 있음
+**v1.0.34** (배포 완료)
+
+> 배포/환경 관련 주의: 시크릿(`FIREBASE_SERVICE_ACCOUNT`, `JIRA_*`)은 Vercel **Production·Preview 스코프에만** 있음(Development 없음) → `vercel dev`로는 `/api/*` 함수가 안 돔. **API 변경 테스트는 브랜치 push → Vercel 프리뷰**로. 프로덕션 도메인: `issue.datasystem.app`.
 
 ---
 
@@ -43,33 +44,39 @@
 src/
   pages/
     HomePage.tsx         # 제품/테스트묶음 목록
-    TestCasesPage.tsx    # 테스트케이스 & 운영이슈 목록 (핵심 파일, 1800줄+)
+    TestCasesPage.tsx    # 테스트케이스 & 운영이슈 목록 (핵심 파일, 1700줄+)
     AdminPage.tsx        # 사용자 권한 관리 (admin만 접근)
     LoginPage.tsx
     RegisterPage.tsx
   components/
     IssueForm.tsx        # 운영이슈 등록 폼 (dev suite용)
     TestCaseForm.tsx     # 테스트케이스 등록 폼 (qa suite용)
-    RichTextEditor.tsx   # Tiptap 기반 리치텍스트 에디터
+    RichTextEditor.tsx   # Tiptap 에디터 (이미지 붙여넣기/드롭/업로드 지원)
     ui/
       sheet.tsx          # 커스텀 사이드 드로어 컴포넌트
       checkbox.tsx       # 커스텀 체크박스 (onChange prop, onCheckedChange 아님)
+      switch.tsx         # 커스텀 토글 스위치 (onChange prop)
   lib/
-    firestore.ts         # Firestore CRUD + uploadImage
-    constants.ts         # 레이블/색상 상수 (PRIORITY, TEST_STATUS, PROCESSING_STATUS)
-    firebase.ts          # Firebase 초기화
+    firestore.ts         # Firestore CRUD + uploadImage + deployBatches CRUD
+    constants.ts         # 레이블/색상 + ROLE_LABELS, VIEW_CONTROL_ROLES, canViewByRole
+    firebase.ts          # Firebase 초기화 (ignoreUndefinedProperties)
+    api.ts               # authedFetch — /api 호출 시 Firebase ID 토큰 자동 첨부
   store/
     auth.tsx             # 인증 상태, 가입 시 기본 role = 'staff'
   types/
     index.ts             # 모든 TypeScript 타입 정의
 
-api/                     # Vercel 서버리스 함수
+api/                     # Vercel 서버리스 함수 (모두 Firebase 토큰 인증 필요)
+  lib/
+    admin.ts             # firebase-admin 초기화 (FIREBASE_SERVICE_ACCOUNT)
+    auth.ts              # requireAuth — Bearer 토큰 검증 + role 가드
   jira.ts                # Jira 티켓 생성 (ADF 형식)
   jira-delete.ts         # Jira 티켓 삭제
   jira-update-assignee.ts
   jira-users.ts
-  jira-webhook.ts
-  jira-fields.ts
+  jira-webhook.ts        # JIRA_WEBHOOK_SECRET 설정 시 ?token= 검증
+
+firestore.rules          # 보안 규칙 원본 (Vercel 배포 X → 콘솔에서 게시 필요)
 ```
 
 ---
@@ -77,11 +84,19 @@ api/                     # Vercel 서버리스 함수
 ## 핵심 타입 (`src/types/index.ts`)
 
 ```typescript
-type UserRole = 'admin' | 'developer' | 'staff' | 'viewer'
+type UserRole = 'admin' | 'developer' | 'staff'   // viewer 폐지(staff로 통합)
 type SuiteType = 'qa' | 'dev'
 type Priority = 'critical' | 'high' | 'medium' | 'low'
 type TestStatus = 'pass' | 'fail' | 'blocked' | 'not_tested'
-type ProcessingStatus = 'pending' | 'in_progress' | 'dev_deployed' | 'resolved' | 'wont_fix'
+type ProcessingStatus = 'pending' | 'in_progress' | 'dev_deploy_waiting' | 'dev_deployed' | 'resolved' | 'wont_fix'
+type DeployBatchStatus = 'planned' | 'deployed'
+
+interface Product   { /* ... */ visibleRoles?: UserRole[] }   // 역할별 노출 제어
+interface TestSuite { /* ... */ visibleRoles?: UserRole[] }
+
+interface DeployBatch {   // 배포묶음 (suite 단위)
+  id, suiteId, name, deployDate, status: DeployBatchStatus, order, createdAt
+}
 
 interface TestCase {
   // 공통 필드
@@ -104,6 +119,7 @@ interface TestCase {
   devChangelog?      // 개발 변경 내역
   testChecklist?: Array<{ text: string; checked: boolean }>
   testProgressNote?
+  deployBatchId?     // 배포묶음 ID
 }
 ```
 
@@ -113,20 +129,27 @@ interface TestCase {
 
 | Role | 설명 | 주요 권한 |
 |------|------|----------|
-| `admin` | 관리자 | 모든 권한 + 사용자 관리 (AdminPage 접근) |
-| `developer` | 개발자 | admin과 동일, **AdminPage 접근 불가** |
-| `staff` | 스태프 (기본 가입 role) | 조회 + 처리상태 변경 |
-| `viewer` | 뷰어 (레거시) | 조회만 |
+| `admin` | 관리자 | 모든 권한 + 프로덕트/묶음 관리 + 사용자 관리 |
+| `developer` | 개발자 | 이슈/테스트케이스 등록·수정·삭제 + Jira. **프로덕트/묶음 관리 X, AdminPage X** |
+| `staff` | 스태프 (기본 가입 role) | 조회 위주 (현재 편집 권한 없음) |
+
+> `viewer`는 폐지됨 — AdminPage 진입 시 기존 viewer 계정은 자동으로 staff로 이관.
 
 **코드 내 권한 체크 패턴:**
 ```typescript
-// TestCasesPage, HomePage
+// 이슈/테스트케이스 편집 (admin + developer)
 const isAdmin = user?.role === 'admin' || user?.role === 'developer'
 const canEditStatus = user?.role === 'admin' || user?.role === 'developer'
 
-// App.tsx — AdminPage 라우트 가드
+// 프로덕트/묶음 구조 관리 (admin 전용) — HomePage
+const canManageProduct = user?.role === 'admin'
+const canManageSuite = user?.role === 'admin'
+
+// App.tsx — AdminPage 라우트 가드 / 헤더 사용자관리 버튼도 admin 전용
 if (user.role !== 'admin') return <Navigate to="/" replace />
 ```
+
+> **권한은 Firestore 보안 규칙(`firestore.rules`)으로 서버에서 강제** — 클라이언트 체크는 UI 가림일 뿐. 규칙 변경 시 Firebase 콘솔에서 게시해야 적용됨.
 
 ---
 
@@ -187,25 +210,29 @@ Tailwind reset이 list-style 제거 → 명시적 CSS 필요:
 ## 처리 상태 (`ProcessingStatus`)
 
 ```
-pending → in_progress → dev_deployed → resolved
-                                     → wont_fix
+pending → in_progress → dev_deploy_waiting → dev_deployed → resolved
+                                                          → wont_fix
 ```
 
 | 값 | 한국어 | 색상 |
 |----|--------|------|
 | `pending` | 미처리 | slate |
 | `in_progress` | 처리중 | blue |
+| `dev_deploy_waiting` | 개발배포대기 | indigo |
 | `dev_deployed` | 개발배포 | violet |
 | `resolved` | 처리완료 | emerald |
 | `wont_fix` | 보류 | slate-400 |
+
+> 처리상태 Select는 TestCasesPage 5곳 + IssueForm + TestCaseForm에 있음 — 추가 시 전부 반영.
 
 ---
 
 ## Firestore 컬렉션
 
-- `products` — 제품 목록
-- `suites` — 테스트 묶음 (productId로 필터)
+- `products` — 제품 목록 (`visibleRoles`로 역할별 노출 제어)
+- `suites` — 테스트 묶음 (productId로 필터, `visibleRoles`)
 - `testcases` — 테스트케이스 + 운영이슈 (suiteId로 필터)
+- `deployBatches` — 배포묶음 (suiteId로 필터)
 - `users` — 사용자 프로필
 
 ---
@@ -228,15 +255,28 @@ console.log('%c 이슈트래커 v1.0.XX ', ...)
 
 ---
 
-## 현재 미배포 변경사항 (v1.0.19 예정)
+## 주요 기능 (최근 추가)
 
-1. **처리상태 `dev_deployed`(개발배포) 추가**
-   - `src/types/index.ts` — ProcessingStatus 타입에 추가
-   - `src/lib/constants.ts` — 레이블/색상 추가
-   - `src/pages/TestCasesPage.tsx` — 모든 처리상태 Select에 옵션 추가 (5곳)
+### 역할별 노출 제어 (`visibleRoles`)
+- 프로덕트/묶음 수정 다이얼로그에서 staff에게 노출 여부 설정 (admin·developer는 항상 조회)
+- `canViewByRole(visibleRoles, role)` (`lib/constants.ts`): undefined=전체공개. HomePage 목록 필터 + TestCasesPage 딥링크 가드
+- ⚠️ 클라이언트 필터일 뿐 — 민감 데이터면 규칙으로도 막아야 함
 
-2. **권한 개편**
-   - `UserRole`에 `staff` 추가
-   - 가입 기본 role: `viewer` → `staff`
-   - `developer` = admin과 동일 권한 (AdminPage 제외)
-   - `AdminPage.tsx` — staff role 레이블/배지/선택지 추가
+### 묶음 개인 숨김 (사용자별·기기별)
+- 각 묶음 카드 눈 아이콘으로 숨김, 상단 토글 스위치로 표시/해제
+- `localStorage` 키 `hiddenSuites:{uid}` — 백엔드 무관
+
+### 배포묶음 (Deploy Batch)
+- 운영이슈(dev) 묶음에서 "이번 배포에 포함되는 이슈" 그룹핑 (suite 단위)
+- 필터바 `+ 배포묶음` 생성(이름+예정일), 이슈 목록을 배포묶음별 그룹 헤더로 표시, 상태 토글(예정/완료)
+- 이슈 등록 폼·드로어에서 `deployBatchId` 배정. 컬렉션 `deployBatches`
+
+### API 인증 (v1.0.32~)
+- 모든 `/api/jira*`는 `Authorization: Bearer <Firebase ID토큰>` 필요 (`api/lib/auth.ts`의 `requireAuth`, admin·developer만)
+- 프론트는 `src/lib/api.ts`의 `authedFetch` 사용 (토큰 자동 첨부)
+
+### Jira 우선순위 매핑 (`api/jira.ts` PRIORITY_MAP)
+- 긴급→Hotfix, 높음→High, 보통→Medium, 낮음→Low
+
+### 에디터 이미지
+- `RichTextEditor`: 붙여넣기/드래그/툴바 버튼 → Cloudinary 업로드 후 본문 삽입 (`@tiptap/extension-image`)
