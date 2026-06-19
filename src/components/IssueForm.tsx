@@ -7,7 +7,7 @@ import { RichTextEditor } from '@/components/RichTextEditor'
 import { DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Plus, X } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
-import type { Priority, ProcessingStatus, UserProfile } from '@/types'
+import type { Priority, ProcessingStatus, UserProfile, DeployBatch } from '@/types'
 
 export type IssueFormData = {
   area: string
@@ -25,6 +25,7 @@ export type IssueFormData = {
   devChangelog: string
   testChecklistItems: string[]
   testProgressNote: string
+  deployBatchId: string
 }
 
 interface Props {
@@ -32,6 +33,7 @@ interface Props {
   initial?: Partial<IssueFormData>
   users?: UserProfile[]
   areas?: string[]
+  batches?: DeployBatch[]
   jiraProjectKey?: string
   currentUserDisplayName?: string
   onSave: (data: IssueFormData, jiraFields: { issueType: string }) => Promise<void>
@@ -54,9 +56,10 @@ const defaultForm: IssueFormData = {
   devChangelog: '',
   testChecklistItems: [],
   testProgressNote: '',
+  deployBatchId: '',
 }
 
-export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, onCancel }: Props) {
+export function IssueForm({ initial, users = [], areas, batches = [], jiraProjectKey, onSave, onCancel }: Props) {
   const [form, setForm] = useState<IssueFormData>({ ...defaultForm, ...initial })
   const [saving, setSaving] = useState(false)
   const [jiraIssueType, setJiraIssueType] = useState('스토리')
@@ -203,6 +206,20 @@ export function IssueForm({ initial, users = [], areas, jiraProjectKey, onSave, 
               onChange={(e) => set('dueDate', e.target.value)}
               className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>배포묶음</Label>
+            <Select value={form.deployBatchId || '__none__'} onValueChange={(v) => set('deployBatchId', v === '__none__' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="미지정" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">미지정</SelectItem>
+                {batches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.status === 'deployed' ? '✅ ' : '🗓 '}{b.name}{b.deployDate ? ` (${b.deployDate})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

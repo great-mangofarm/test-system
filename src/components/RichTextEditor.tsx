@@ -1,12 +1,15 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { useEffect } from 'react'
+import Image from '@tiptap/extension-image'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Bold, Italic, List, ListOrdered,
-  Heading1, Heading2, Heading3, Minus,
+  Heading1, Heading2, Heading3, Minus, ImagePlus, Loader2,
 } from 'lucide-react'
+import { uploadImage } from '@/lib/firestore'
+import { toast } from '@/hooks/use-toast'
 
 interface Props {
   value: string
@@ -41,6 +44,26 @@ function ToolbarButton({
 }
 
 export function RichTextEditor({ value, onChange, onBlur, placeholder, className, readOnly = false }: Props) {
+  const editorRef = useRef<Editor | null>(null)
+  const [uploading, setUploading] = useState(false)
+
+  // 이미지 파일 업로드(Cloudinary) 후 에디터에 삽입 — 붙여넣기/드롭/버튼 공용
+  async function uploadAndInsert(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) return
+    setUploading(true)
+    try {
+      for (const file of images) {
+        const url = await uploadImage(file)
+        editorRef.current?.chain().focus().setImage({ src: url }).run()
+      }
+    } catch {
+      toast({ variant: 'destructive', title: '이미지 업로드 실패' })
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -49,9 +72,26 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
       Placeholder.configure({
         placeholder: placeholder ?? '내용을 입력하세요...',
       }),
+      Image.configure({ inline: false }),
     ],
     content: value || '',
     editable: !readOnly,
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'))
+        if (files.length === 0) return false
+        event.preventDefault()
+        uploadAndInsert(files)
+        return true
+      },
+      handleDrop: (_view, event) => {
+        const files = Array.from((event as DragEvent).dataTransfer?.files ?? []).filter((f) => f.type.startsWith('image/'))
+        if (files.length === 0) return false
+        event.preventDefault()
+        uploadAndInsert(files)
+        return true
+      },
+    },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML()
       onChange(html === '<p></p>' ? '' : html)
@@ -62,6 +102,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
       onBlur(html === '<p></p>' ? '' : html)
     },
   })
+  editorRef.current = editor
 
   // 외부에서 value가 바뀔 때만 동기화 (다른 레코드 열기/초기 로딩 등).
   // 사용자가 편집 중(포커스/한글 IME 조합 중)이면 절대 setContent 하지 않음 →
@@ -83,6 +124,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           'prose-headings:font-semibold prose-headings:text-slate-800',
           'prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5',
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
+          '[&_img]:max-w-full [&_img]:rounded [&_img]:my-1',
           className,
         )}
         dangerouslySetInnerHTML={{ __html: value || '<span class="text-slate-300">—</span>' }}
@@ -152,6 +194,19 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
         >
           <Minus className="w-3.5 h-3.5" />
         </ToolbarButton>
+        <label
+          title="이미지 추가 (붙여넣기·드래그도 가능)"
+          className="p-1.5 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer"
+        >
+          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => { uploadAndInsert(Array.from(e.target.files ?? [])); e.target.value = '' }}
+          />
+        </label>
       </div>
 
       {/* 에디터 영역 */}
@@ -164,6 +219,8 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
           '[&_.tiptap]:outline-none [&_.tiptap]:min-h-[100px]',
           '[&_.tiptap]:break-words [&_.tiptap]:[overflow-wrap:anywhere]',
+          '[&_.tiptap_img]:max-w-full [&_.tiptap_img]:rounded [&_.tiptap_img]:my-1',
+          '[&_.tiptap_img.ProseMirror-selectednode]:outline [&_.tiptap_img.ProseMirror-selectednode]:outline-2 [&_.tiptap_img.ProseMirror-selectednode]:outline-primary',
           '[&_.tiptap_ul]:list-disc [&_.tiptap_ul]:pl-5 [&_.tiptap_ul]:my-1',
           '[&_.tiptap_ol]:list-decimal [&_.tiptap_ol]:pl-5 [&_.tiptap_ol]:my-1',
           '[&_.tiptap_li]:my-0.5',

@@ -519,6 +519,7 @@ export default function TestCasesPage() {
         .filter((line) => line.length > 0)
         .map((text) => ({ text, checked: false })),
       testProgressNote: '',
+      deployBatchId: data.deployBatchId,
       startDate: data.startDate,
       dueDate: data.dueDate,
       // 테스트케이스 필드 빈값
@@ -814,6 +815,7 @@ export default function TestCasesPage() {
                   suiteId={suiteId!}
                   users={users}
                   areas={product?.areas}
+                  batches={batches}
                   jiraProjectKey={product?.jiraProjectKey}
                   currentUserDisplayName={user?.displayName}
                   onSave={handleIssueSave}
