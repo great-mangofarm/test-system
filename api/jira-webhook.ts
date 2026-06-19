@@ -14,6 +14,11 @@ const STATUS_MAP: Record<string, string> = {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end()
+  // 위조 방지: JIRA_WEBHOOK_SECRET이 설정돼 있으면 ?token= 일치 필수
+  // (Jira가 호출하므로 Firebase 토큰을 쓸 수 없어 공유 시크릿 방식)
+  if (process.env.JIRA_WEBHOOK_SECRET && req.query.token !== process.env.JIRA_WEBHOOK_SECRET) {
+    return res.status(401).end()
+  }
 
   try {
     const body = req.body

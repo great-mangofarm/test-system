@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { requireAuth } from './lib/auth.js'
 
 const JIRA_BASE_URL = process.env.JIRA_BASE_URL!
 const JIRA_EMAIL = process.env.JIRA_EMAIL!
@@ -10,6 +11,7 @@ function authHeader() {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+  if (!(await requireAuth(req, res, { adminOrDev: true }))) return
 
   const { projectKey, email } = req.query
 

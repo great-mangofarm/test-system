@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Sheet, SheetHeader, SheetBody, SheetFooter } from '@/components/ui/sheet'
 import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers, getDeployBatches, createDeployBatch, updateDeployBatch, deleteDeployBatch } from '@/lib/firestore'
 import { canViewByRole } from '@/lib/constants'
+import { authedFetch } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile, DeployBatch } from '@/types'
 import {
@@ -414,7 +415,7 @@ export default function TestCasesPage() {
         const assigneeUser = users.find((u) => u.displayName === data.assignedDeveloper)
         if (assigneeUser?.email) {
           try {
-            const r = await fetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
+            const r = await authedFetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
             if (r.ok) {
               const d = await r.json()
               if (d?.accountId) assigneeAccountId = d.accountId
@@ -423,7 +424,7 @@ export default function TestCasesPage() {
         }
       }
 
-      const res = await fetch('/api/jira', {
+      const res = await authedFetch('/api/jira', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -551,14 +552,14 @@ export default function TestCasesPage() {
         if (data.assignedDeveloper) {
           const assigneeUser = users.find((u) => u.displayName === data.assignedDeveloper)
           if (assigneeUser?.email) {
-            const r = await fetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
+            const r = await authedFetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
             if (r.ok) {
               const d = await r.json()
               if (d?.accountId) assigneeAccountId = d.accountId
             }
           }
         }
-        const res = await fetch('/api/jira', {
+        const res = await authedFetch('/api/jira', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -644,12 +645,12 @@ export default function TestCasesPage() {
       if (tc.assignedDeveloper) {
         const assigneeUser = users.find((u) => u.displayName === tc.assignedDeveloper)
         if (assigneeUser?.email) {
-          const r = await fetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
+          const r = await authedFetch(`/api/jira-users?email=${encodeURIComponent(assigneeUser.email)}`)
           if (r.ok) { const d = await r.json(); if (d?.accountId) assigneeAccountId = d.accountId }
         }
       }
       const reporterName = user ? [user.team, user.displayName].filter(Boolean).join(' ') : undefined
-      const res = await fetch('/api/jira', {
+      const res = await authedFetch('/api/jira', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -698,7 +699,7 @@ export default function TestCasesPage() {
       const issueKey = extractJiraKey(deleteTarget.ticketLink)
       if (issueKey) {
         try {
-          const r = await fetch('/api/jira-delete', {
+          const r = await authedFetch('/api/jira-delete', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ issueKey }),
@@ -744,7 +745,7 @@ export default function TestCasesPage() {
       const issueKey = extractJiraKey(original.ticketLink)
       const dev = users.find((u) => u.displayName === inlineForm.assignedDeveloper)
       if (issueKey && dev) {
-        fetch('/api/jira-update-assignee', {
+        authedFetch('/api/jira-update-assignee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ issueKey, developerEmail: dev.email, jiraDisplayName: dev.jiraDisplayName ?? dev.displayName }),
@@ -770,7 +771,7 @@ export default function TestCasesPage() {
       const issueKey = extractJiraKey(tc.ticketLink)
       const dev = users.find((u) => u.displayName === assignedDeveloper)
       if (issueKey && dev) {
-        fetch('/api/jira-update-assignee', {
+        authedFetch('/api/jira-update-assignee', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ issueKey, developerEmail: dev.email, jiraDisplayName: dev.jiraDisplayName ?? dev.displayName }),

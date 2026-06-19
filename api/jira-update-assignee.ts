@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { requireAuth } from './lib/auth.js'
 
 const JIRA_BASE_URL = process.env.JIRA_BASE_URL!
 const JIRA_EMAIL = process.env.JIRA_EMAIL!
@@ -26,6 +27,7 @@ async function findByAssignable(projectKey: string, displayName: string): Promis
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end()
+  if (!(await requireAuth(req, res, { adminOrDev: true }))) return
 
   const { issueKey, developerEmail, jiraDisplayName } = req.body
   if (!issueKey) return res.status(400).json({ error: 'issueKey required' })

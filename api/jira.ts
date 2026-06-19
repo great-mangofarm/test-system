@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { requireAuth } from './lib/auth.js'
 
 const JIRA_BASE_URL = process.env.JIRA_BASE_URL!        // https://everonteam.atlassian.net
 const JIRA_EMAIL = process.env.JIRA_EMAIL!              // jyp@everon.co.kr
@@ -95,6 +96,7 @@ function buildIssueADF(background: string, requirements: string, figmaLink: stri
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  if (!(await requireAuth(req, res, { adminOrDev: true }))) return
 
   const {
     projectKey,
