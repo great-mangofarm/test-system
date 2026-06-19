@@ -280,3 +280,32 @@ console.log('%c 이슈트래커 v1.0.XX ', ...)
 
 ### 에디터 이미지
 - `RichTextEditor`: 붙여넣기/드래그/툴바 버튼 → Cloudinary 업로드 후 본문 삽입 (`@tiptap/extension-image`)
+
+---
+
+## 문서 안내
+
+- **`README.md`** — 프로덕트 소개(무슨 앱인지, 기능, 역할, 화면, 실행/배포)
+- **`CHANGELOG.md`** — 버전별 변경 이력 + **다음에 볼 때 확인할 미해결 항목** (작업 재개 시 최상단 "🔭 다음에 볼 때" 먼저 확인)
+- **이 문서(CLAUDE.md)** — 구조·규칙·권한·주의사항(인수인계용)
+
+---
+
+## 다음에 볼 때 (요약 — 상세는 CHANGELOG의 "🔭 다음에 볼 때")
+
+작업 재개 전 빠른 체크:
+
+1. **Jira 우선순위 검증** — `api/jira.ts` `PRIORITY_MAP`의 `high: 'High'`가 실제 Jira와 맞는지(가정 상태). 높음 이슈 만들어 확인.
+2. **규칙 변경 시 콘솔 게시** — `firestore.rules`는 저장소 기록용. Firebase 콘솔에서 게시해야 적용.
+3. **API/서버 작업 시** — `vercel dev`는 시크릿이 없어 안 됨(Production/Preview 스코프에만 존재). **브랜치 push → Vercel 프리뷰**로 테스트. 프리뷰는 Vercel SSO 벽이 있으나 브라우저 로그인으로 통과.
+4. **큰 미완 과제** — 다우오피스 전자결재 연동(스태프 개발요청서 자동 기안)은 **유료 옵션 결정 대기**. 조사 내용은 CHANGELOG 참고.
+5. **코드리뷰 잔여** — index key, stats 중복읽기, 페이지네이션 등 낮은 우선순위 항목들이 CHANGELOG에 정리돼 있음.
+
+---
+
+## 작업 시 주의 (이번 정비에서 확인된 것)
+
+- **처리상태 Select는 7곳** — TestCasesPage 5곳 + IssueForm + TestCaseForm. 상태 추가 시 전부 반영.
+- **권한 플래그 구분** — 이슈 편집은 `isAdmin`(admin+dev), 구조 관리는 `canManageProduct`/`canManageSuite`(admin only). Firestore 규칙과 항상 일치시킬 것.
+- **운영이슈 통계는 `resolved` 기준** (qa는 `pass` 기준) — 통계 코드 수정 시 `isIssueSuite` 분기 유지.
+- **에디터 value 동기화는 `editor.isFocused`일 때 건너뜀** — 한글 IME 보호. 이 가드 건드리지 말 것.
