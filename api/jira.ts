@@ -5,9 +5,10 @@ const JIRA_BASE_URL = process.env.JIRA_BASE_URL!        // https://everonteam.at
 const JIRA_EMAIL = process.env.JIRA_EMAIL!              // jyp@everon.co.kr
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN!      // API 토큰
 
+// 우리 4단계(긴급/높음/보통/낮음) → Jira 우선순위
 const PRIORITY_MAP: Record<string, string> = {
   critical: 'Hotfix',
-  high: 'Hotfix',
+  high: 'High',
   medium: 'Medium',
   low: 'Low',
 }
