@@ -1461,7 +1461,7 @@ export default function TestCasesPage() {
             <SheetHeader onClose={closeDrawer}>
               <div className="flex items-center gap-3 min-w-0">
                 <span className="text-xs font-mono text-slate-400 shrink-0">TC-{String(tc.order + 1).padStart(3, '0')}</span>
-                <Input className="h-7 text-sm font-semibold border-transparent hover:border-slate-200 focus:border-primary flex-1" value={(f.title as string) ?? ''} onChange={(e) => setF('title', e.target.value)} readOnly={!isAdmin} />
+                <Input className="h-7 text-xs font-semibold border-transparent hover:border-slate-200 focus:border-primary flex-1" value={(f.title as string) ?? ''} onChange={(e) => setF('title', e.target.value)} readOnly={!isAdmin} />
                 <span className="text-xs text-slate-400 shrink-0">등록일 {formatDate(tc.createdAt)}</span>
               </div>
             </SheetHeader>
@@ -1471,13 +1471,13 @@ export default function TestCasesPage() {
               <div className="grid grid-cols-4 gap-3">
                 <div>
                   <p className="text-xs text-slate-400 mb-1">영역</p>
-                  {isAdmin ? <Input className="h-8 text-sm" value={(f.area as string) ?? ''} onChange={(e) => setF('area', e.target.value)} />
+                  {isAdmin ? <Input className="h-8 text-xs" value={(f.area as string) ?? ''} onChange={(e) => setF('area', e.target.value)} />
                     : <p className="text-sm font-medium text-slate-700">{tc.area || '—'}</p>}
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 mb-1">우선순위</p>
                   <Select value={(f.priority as string)} onValueChange={(v) => setF('priority', v)}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="critical">긴급</SelectItem>
                       <SelectItem value="high">높음</SelectItem>
@@ -1489,7 +1489,7 @@ export default function TestCasesPage() {
                 <div>
                   <p className="text-xs text-slate-400 mb-1">담당 개발자</p>
                   <Select value={(f.assignedDeveloper as string) || '__none__'} onValueChange={(v) => setF('assignedDeveloper', v === '__none__' ? '' : v)}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선택" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">—</SelectItem>
                       {users.map((u) => <SelectItem key={u.uid} value={u.displayName}>{u.displayName}</SelectItem>)}
@@ -1512,19 +1512,19 @@ export default function TestCasesPage() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 mb-1">시작일</p>
-                  <input type="date" className="h-8 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  <input type="date" className="h-8 w-full px-3 text-xs border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     value={(f.startDate as string) ?? ''} onChange={(e) => setF('startDate', e.target.value)} readOnly={!isAdmin} />
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 mb-1">기한</p>
-                  <input type="date" className="h-8 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  <input type="date" className="h-8 w-full px-3 text-xs border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     value={(f.dueDate as string) ?? ''} onChange={(e) => setF('dueDate', e.target.value)} readOnly={!isAdmin} />
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs text-slate-400 mb-1">배포묶음</p>
                   {canEditStatus ? (
                     <Select value={tc.deployBatchId || '__none__'} onValueChange={(v) => assignBatch(tc.id, v === '__none__' ? '' : v)}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="미지정" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="미지정" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">미지정</SelectItem>
                         {batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.status === 'deployed' ? '✅ ' : '🗓 '}{b.name}{b.deployDate ? ` (${b.deployDate})` : ''}</SelectItem>)}
@@ -1537,7 +1537,7 @@ export default function TestCasesPage() {
                 <div className="col-span-2">
                   <p className="text-xs text-slate-400 mb-1">Jira 티켓</p>
                   <div className="flex items-center gap-2">
-                    <Input className="h-8 text-sm flex-1" placeholder="https://..." value={(f.ticketLink as string) ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
+                    <Input className="h-8 text-xs flex-1" placeholder="https://..." value={(f.ticketLink as string) ?? ''} onChange={(e) => setF('ticketLink', e.target.value)} />
                     {f.ticketLink
                       ? <a href={f.ticketLink as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-slate-400 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>
                       : <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" disabled={jiraRetrying === tc.id} onClick={() => retryCreateJira(tc)}>
