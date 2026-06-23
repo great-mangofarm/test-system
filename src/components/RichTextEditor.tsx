@@ -124,6 +124,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           'prose-headings:font-semibold prose-headings:text-slate-800',
           'prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5',
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
+          '[&_p]:text-xs [&_li]:text-xs',
           '[&_img]:max-w-full [&_img]:rounded [&_img]:my-1',
           className,
         )}
@@ -219,6 +220,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
           '[&_.tiptap]:outline-none [&_.tiptap]:min-h-[100px]',
           '[&_.tiptap]:break-words [&_.tiptap]:[overflow-wrap:anywhere]',
+          '[&_.tiptap]:text-xs [&_.tiptap_p]:text-xs [&_.tiptap_li]:text-xs',
           '[&_.tiptap_img]:max-w-full [&_.tiptap_img]:rounded [&_.tiptap_img]:my-1',
           '[&_.tiptap_img.ProseMirror-selectednode]:outline [&_.tiptap_img.ProseMirror-selectednode]:outline-2 [&_.tiptap_img.ProseMirror-selectednode]:outline-primary',
           '[&_.tiptap_ul]:list-disc [&_.tiptap_ul]:pl-5 [&_.tiptap_ul]:my-1',
