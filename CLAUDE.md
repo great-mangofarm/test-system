@@ -6,8 +6,8 @@
 
 ## 필수 규칙 (반드시 지킬 것)
 
-- **배포 전 반드시 버전 먼저 말하기** — "vX.Y.0으로 배포하겠습니다" 확인 후 진행
-- **버전 규칙 (v1.0.36 이후)** — 배포마다 **마이너 +1, 패치는 0으로 초기화** (내용·규모 무관). 예: v1.0.36 → v1.1.0 → v1.2.0 …. `src/main.tsx`의 console.log 버전 문자열 수정
+- **배포 전 반드시 버전 먼저 말하기** — "vX.Y.Z로 배포하겠습니다" 확인 후 진행
+- **버전 규칙** — 업데이트 규모에 따라 **패치(작은 변경)** 또는 **마이너(큰 변경)** bump (일반 semver). 패치가 너무 커지면 마이너 올리고 패치 0으로 리셋(예: v1.0.36 → v1.1.0). `src/main.tsx`의 console.log 버전 문자열 수정
 - **`.env.local` 절대 커밋 금지** — Firebase 설정, 서비스 계정 키, 앱 인증 정보 포함
 - **배포 명령어**: `git push git@github-new:great-mangofarm/test-system.git main`
 - **앱 이름**: 이슈트래커
@@ -32,7 +32,7 @@
 
 ## 현재 버전
 
-**v1.0.36** (배포 완료) — **다음 배포는 v1.1.0** (이후 배포마다 마이너 +1, 패치 0)
+**v1.1.0** (배포 완료) — 다음 배포는 규모에 따라 v1.1.1(패치) 또는 v1.2.0(마이너)
 
 > 배포/환경 관련 주의: 시크릿(`FIREBASE_SERVICE_ACCOUNT`, `JIRA_*`)은 Vercel **Production·Preview 스코프에만** 있음(Development 없음) → `vercel dev`로는 `/api/*` 함수가 안 돔. **API 변경 테스트는 브랜치 push → Vercel 프리뷰**로. 프로덕션 도메인: `issue.datasystem.app`.
 
@@ -250,9 +250,9 @@ const url = await uploadImage(file)  // Cloudinary 업로드 → URL 반환
 
 ```
 src/main.tsx
-console.log('%c 이슈트래커 vX.Y.0 ', ...)
+console.log('%c 이슈트래커 vX.Y.Z ', ...)
 ```
-> 배포마다 마이너(Y) +1, 패치는 0 고정. 현재 v1.0.36 → 다음 v1.1.0.
+> 규모에 따라 패치(Z) 또는 마이너(Y) bump. 현재 v1.1.0.
 
 ---
 
