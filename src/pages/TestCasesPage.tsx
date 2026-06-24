@@ -194,6 +194,7 @@ export default function TestCasesPage() {
   const [batches, setBatches] = useState<DeployBatch[]>([])
   const [batchFilter, setBatchFilter] = useState<string>('all') // 'all' | batchId | '__none__'
   const [batchDialogOpen, setBatchDialogOpen] = useState(false)
+  const [batchDialogAssignTo, setBatchDialogAssignTo] = useState<string | null>(null) // 생성 후 이 이슈의 편집버퍼에 배정
   const [batchForm, setBatchForm] = useState({ name: '', deployDate: '' })
   const [deleteBatchTarget, setDeleteBatchTarget] = useState<DeployBatch | null>(null)
 
@@ -297,10 +298,6 @@ export default function TestCasesPage() {
     setCases((prev) => prev.map((c) => c.deployBatchId === batch.id ? { ...c, deployBatchId: '' } : c))
     setBatches((prev) => prev.filter((b) => b.id !== batch.id))
     toast({ title: '배포묶음이 삭제되었습니다' })
-  }
-  async function assignBatch(tcId: string, batchId: string) {
-    await updateTestCase(tcId, { deployBatchId: batchId })
-    setCases((prev) => prev.map((c) => c.id === tcId ? { ...c, deployBatchId: batchId } : c))
   }
 
   // 역할 노출 제어: 권한 없는 사용자가 URL로 직접 접근하면 홈으로 차단
@@ -1525,11 +1522,15 @@ export default function TestCasesPage() {
                 <div className="col-span-2">
                   <p className="text-xs text-slate-400 mb-1">배포묶음</p>
                   {canEditStatus ? (
-                    <Select value={tc.deployBatchId || '__none__'} onValueChange={(v) => assignBatch(tc.id, v === '__none__' ? '' : v)}>
+                    <Select value={(f.deployBatchId as string) || '__none__'} onValueChange={(v) => {
+                      if (v === '__new__') { setBatchForm({ name: '', deployDate: '' }); setBatchDialogAssignTo(tc.id); setBatchDialogOpen(true); return }
+                      setF('deployBatchId', v === '__none__' ? '' : v)
+                    }}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="미지정" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">미지정</SelectItem>
                         {batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.status === 'deployed' ? '✅ ' : '🗓 '}{b.name}{b.deployDate ? ` (${b.deployDate})` : ''}</SelectItem>)}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ 새 배포묶음 만들기</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -1678,7 +1679,7 @@ export default function TestCasesPage() {
       </AlertDialog>
 
       {/* 배포묶음 생성 다이얼로그 */}
-      <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
+      <Dialog open={batchDialogOpen} onOpenChange={(o) => { setBatchDialogOpen(o); if (!o) setBatchDialogAssignTo(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>새 배포묶음</DialogTitle>
@@ -1698,7 +1699,13 @@ export default function TestCasesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>취소</Button>
             <Button disabled={!batchForm.name.trim()}
-              onClick={async () => { await handleCreateBatch(batchForm.name, batchForm.deployDate); setBatchDialogOpen(false) }}>
+              onClick={async () => {
+                const id = await handleCreateBatch(batchForm.name, batchForm.deployDate)
+                // 드로어에서 호출됐으면 새 묶음을 편집버퍼에 배정(변경사항 저장 시 반영)
+                if (id && batchDialogAssignTo) setInlineForm((p) => ({ ...p, deployBatchId: id }))
+                setBatchDialogOpen(false)
+                setBatchDialogAssignTo(null)
+              }}>
               생성
             </Button>
           </DialogFooter>
