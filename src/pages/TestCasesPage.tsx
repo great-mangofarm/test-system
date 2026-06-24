@@ -730,15 +730,17 @@ export default function TestCasesPage() {
 
   function startInlineEdit(tc: TestCase) {
     setInlineEditId(tc.id)
-    setInlineForm({ ...tc })
+    // 편집한 필드만 담는다(빈 객체로 시작) → 즉시저장 항목(배포묶음/체크리스트/이미지 등)을
+    // 저장 버튼이 옛값으로 덮어쓰지 않도록. 표시는 f = {...tc, ...inlineForm}로 머지.
+    setInlineForm({})
   }
 
   async function saveInlineEdit(id: string) {
     const original = cases.find((c) => c.id === id)!
     const merged = { ...original, ...inlineForm }
-    await updateTestCase(id, inlineForm)
+    await updateTestCase(id, inlineForm)   // 편집한 필드만 기록
     setCases((prev) => prev.map((c) => c.id === id ? merged : c))
-    setInlineForm({ ...merged })
+    setInlineForm({})   // 저장 후 편집 버퍼 비움
     toast({ title: '변경사항이 저장되었습니다' })
 
     // 담당자가 변경됐으면 Jira에도 반영
@@ -1178,7 +1180,7 @@ export default function TestCasesPage() {
                       <td colSpan={isIssueSuite ? 9 : 10} className="px-8 py-5 bg-sky-50 border-t border-sky-100 border-b-2 border-b-primary/30">
                         {(() => {
                           const isEditing = inlineEditId === tc.id
-                          const f = isEditing ? inlineForm : tc
+                          const f = isEditing ? { ...tc, ...inlineForm } : tc
                           const setF = (key: keyof TestCase, val: string) => setInlineForm((p) => ({ ...p, [key]: val }))
 
                           const isDirty = isEditing && Object.keys(inlineForm).some((k) => {
@@ -1450,7 +1452,7 @@ export default function TestCasesPage() {
         const tc = drawerTc
         if (!tc) return null
         const isEditing = inlineEditId === tc.id
-        const f = isEditing ? inlineForm : tc
+        const f = isEditing ? { ...tc, ...inlineForm } : tc
         const setF = (key: keyof TestCase, val: string) => setInlineForm((p) => ({ ...p, [key]: val }))
         const isDirty = isEditing && Object.keys(inlineForm).some((k) => {
           const key = k as keyof TestCase
@@ -1598,14 +1600,8 @@ export default function TestCasesPage() {
               <div>
                 <p className="text-xs text-blue-500 font-medium mb-1">개발 변경 내역</p>
                 <RichTextEditor
-                  value={tc.devChangelog ?? ''}
-                  onChange={() => { /* 타이핑 중엔 저장하지 않음 — blur 시 1회 저장 */ }}
-                  onBlur={async (v) => {
-                    if (v === (tc.devChangelog ?? '')) return
-                    await updateTestCase(tc.id, { devChangelog: v })
-                    setCases((prev) => prev.map((c) => c.id === tc.id ? { ...c, devChangelog: v } : c))
-                    toast({ title: '개발 변경 내역 저장됨' })
-                  }}
+                  value={(f.devChangelog as string) ?? ''}
+                  onChange={(v) => setF('devChangelog', v)}
                   placeholder="개발 변경 내역을 입력하세요..." readOnly={!canEditStatus} className="[&_.tiptap]:min-h-[100px]" />
               </div>
 

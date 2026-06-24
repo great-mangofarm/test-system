@@ -13,7 +13,7 @@ export function Toaster() {
   const hasToasts = toasts.some((t) => t.open !== false)
 
   return (
-    <ToastProvider duration={4000}>
+    <ToastProvider duration={5000}>
       {hasToasts && (
         <div
           className="fixed inset-0 z-[49]"
