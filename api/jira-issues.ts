@@ -28,8 +28,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   jql += ' ORDER BY created DESC'
 
   try {
-    const url = `${JIRA_BASE_URL}/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=summary,status&maxResults=200`
-    const r = await fetch(url, { headers: { Authorization: authHeader(), Accept: 'application/json' } })
+    // 신 JQL 검색 엔드포인트 (구 /rest/api/3/search 제거됨, CHANGE-2046)
+    const r = await fetch(`${JIRA_BASE_URL}/rest/api/3/search/jql`, {
+      method: 'POST',
+      headers: { Authorization: authHeader(), Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jql, fields: ['summary', 'status'], maxResults: 100 }),
+    })
     const data = await r.json()
     if (!r.ok) return res.status(r.status).json({ error: data.errorMessages ?? data })
 
