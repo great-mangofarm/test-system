@@ -64,7 +64,7 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
-    match /caseGroups/{id} {
+    match /qaTicketGroups/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isEditor();
     }

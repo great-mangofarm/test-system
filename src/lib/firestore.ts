@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck, CaseGroup } from '@/types'
+import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck, QaTicketGroup } from '@/types'
 
 // --- Users ---
 export async function getUsers(): Promise<UserProfile[]> {
@@ -101,25 +101,22 @@ export async function deleteDeployBatch(id: string): Promise<void> {
   await deleteDoc(doc(db, 'deployBatches', id))
 }
 
-// --- Case Groups (테스트케이스 묶음 내부 티켓 그룹) ---
-export async function getCaseGroups(suiteId: string): Promise<CaseGroup[]> {
-  const snap = await getDocs(query(collection(db, 'caseGroups'), where('suiteId', '==', suiteId)))
-  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CaseGroup))
+// --- QA Ticket Groups (QA 묶음 안의 그룹: 티켓 여러 개) ---
+export async function getQaTicketGroups(qaGroupId: string): Promise<QaTicketGroup[]> {
+  const snap = await getDocs(query(collection(db, 'qaTicketGroups'), where('qaGroupId', '==', qaGroupId)))
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as QaTicketGroup))
   return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
 }
-export async function createCaseGroup(data: Omit<CaseGroup, 'id' | 'createdAt'>): Promise<string> {
-  const ref = await addDoc(collection(db, 'caseGroups'), { ...data, createdAt: new Date().toISOString() })
+export async function createQaTicketGroup(data: Omit<QaTicketGroup, 'id' | 'createdAt'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'qaTicketGroups'), { ...data, createdAt: new Date().toISOString() })
   return ref.id
 }
-export async function updateCaseGroup(id: string, data: Partial<CaseGroup>): Promise<void> {
-  await updateDoc(doc(db, 'caseGroups', id), data)
-}
-export async function deleteCaseGroup(id: string): Promise<void> {
-  // 그룹 삭제 시 소속 테스트케이스는 미분류로 (groupId 비움)
-  const snap = await getDocs(query(collection(db, 'testcases'), where('groupId', '==', id)))
+export async function deleteQaTicketGroup(id: string): Promise<void> {
+  // 그룹 삭제 시 소속 케이스도 삭제
+  const snap = await getDocs(query(collection(db, 'qaChecks'), where('ticketGroupId', '==', id)))
   const batch = writeBatch(db)
-  snap.docs.forEach((d) => batch.update(d.ref, { groupId: '' }))
-  batch.delete(doc(db, 'caseGroups', id))
+  snap.docs.forEach((d) => batch.delete(d.ref))
+  batch.delete(doc(db, 'qaTicketGroups', id))
   await batch.commit()
 }
 
@@ -137,17 +134,21 @@ export async function updateQaGroup(id: string, data: Partial<QaGroup>): Promise
   await updateDoc(doc(db, 'qaGroups', id), data)
 }
 export async function deleteQaGroup(id: string): Promise<void> {
-  // 묶음 삭제 시 하위 체크 항목도 함께 삭제
-  const snap = await getDocs(query(collection(db, 'qaChecks'), where('groupId', '==', id)))
+  // 묶음 삭제 시 하위 그룹 + 케이스 모두 삭제
+  const [checksSnap, tgSnap] = await Promise.all([
+    getDocs(query(collection(db, 'qaChecks'), where('qaGroupId', '==', id))),
+    getDocs(query(collection(db, 'qaTicketGroups'), where('qaGroupId', '==', id))),
+  ])
   const batch = writeBatch(db)
-  snap.docs.forEach((d) => batch.delete(d.ref))
+  checksSnap.docs.forEach((d) => batch.delete(d.ref))
+  tgSnap.docs.forEach((d) => batch.delete(d.ref))
   batch.delete(doc(db, 'qaGroups', id))
   await batch.commit()
 }
 
-// --- QA Checks (QA 체크 항목) ---
-export async function getQaChecks(groupId: string): Promise<QaCheck[]> {
-  const snap = await getDocs(query(collection(db, 'qaChecks'), where('groupId', '==', groupId)))
+// --- QA Checks (그룹 안의 케이스) ---
+export async function getQaChecks(qaGroupId: string): Promise<QaCheck[]> {
+  const snap = await getDocs(query(collection(db, 'qaChecks'), where('qaGroupId', '==', qaGroupId)))
   const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as QaCheck))
   return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
 }
