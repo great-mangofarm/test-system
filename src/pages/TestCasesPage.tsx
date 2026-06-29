@@ -17,11 +17,11 @@ import { RichTextEditor } from '@/components/RichTextEditor'
 import type { IssueFormData } from '@/components/IssueForm'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Sheet, SheetHeader, SheetBody, SheetFooter } from '@/components/ui/sheet'
-import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers, getDeployBatches, createDeployBatch, updateDeployBatch, deleteDeployBatch } from '@/lib/firestore'
-import { canViewByRole } from '@/lib/constants'
+import { getProducts, getSuites, getTestCase, getTestCases, createTestCase, updateTestCase, deleteTestCase, getUsers, getDeployBatches, createDeployBatch, updateDeployBatch, deleteDeployBatch, getCaseGroups, createCaseGroup, deleteCaseGroup } from '@/lib/firestore'
+import { canViewByRole, ticketStatusesFor } from '@/lib/constants'
 import { authedFetch } from '@/lib/api'
 import { useAuth } from '@/store/auth'
-import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile, DeployBatch } from '@/types'
+import type { Product, TestSuite, TestCase, TestStatus, ProcessingStatus, UserProfile, DeployBatch, CaseGroup } from '@/types'
 import {
   PRIORITY_LABELS, PRIORITY_COLORS, TEST_STATUS_LABELS, TEST_STATUS_COLORS,
   PROCESSING_STATUS_LABELS, PROCESSING_STATUS_COLORS,
@@ -199,6 +199,16 @@ export default function TestCasesPage() {
   const [batchForm, setBatchForm] = useState({ name: '', deployDate: '' })
   const [deleteBatchTarget, setDeleteBatchTarget] = useState<DeployBatch | null>(null)
 
+  // 티켓 그룹 (테스트케이스 전용)
+  const [caseGroups, setCaseGroups] = useState<CaseGroup[]>([])
+  const [createGroupId, setCreateGroupId] = useState<string>('') // '테스트 추가' 시 배정할 그룹
+  const [ticketPickerOpen, setTicketPickerOpen] = useState(false)
+  const [ticketLoading, setTicketLoading] = useState(false)
+  const [ticketOptions, setTicketOptions] = useState<Array<{ key: string; summary: string; status: string; url: string }>>([])
+  const [ticketSelected, setTicketSelected] = useState<Set<string>>(new Set())
+  const [ticketError, setTicketError] = useState('')
+  const [deleteCaseGroupTarget, setDeleteCaseGroupTarget] = useState<CaseGroup | null>(null)
+
   // Filters
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterProcessing, setFilterProcessing] = useState('all')
@@ -226,11 +236,12 @@ export default function TestCasesPage() {
     const timer = setInterval(async () => {
       if (!productId || !suiteId || editingRef.current) return
       try {
-        const [casesData, batchesData] = await Promise.all([
-          getTestCases(suiteId), getDeployBatches(suiteId),
+        const [casesData, batchesData, caseGroupsData] = await Promise.all([
+          getTestCases(suiteId), getDeployBatches(suiteId), getCaseGroups(suiteId),
         ])
         setCases(casesData)
         setBatches(batchesData)
+        setCaseGroups(caseGroupsData)
       } catch { /* 백그라운드 실패는 무시 */ }
     }, 60000)
     return () => clearInterval(timer)
@@ -264,17 +275,57 @@ export default function TestCasesPage() {
     if (!productId || !suiteId) return
     setLoading(true)
     try {
-      const [prods, suitesData, casesData, usersData, batchesData] = await Promise.all([
-        getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(), getDeployBatches(suiteId),
+      const [prods, suitesData, casesData, usersData, batchesData, caseGroupsData] = await Promise.all([
+        getProducts(), getSuites(productId), getTestCases(suiteId), getUsers(), getDeployBatches(suiteId), getCaseGroups(suiteId),
       ])
       setProduct(prods.find((p) => p.id === productId) ?? null)
       setSuite(suitesData.find((s) => s.id === suiteId) ?? null)
       setCases(casesData)
       setUsers(usersData)
       setBatches(batchesData)
+      setCaseGroups(caseGroupsData)
     } finally {
       setLoading(false)
     }
+  }
+
+  // --- 티켓 그룹 (테스트케이스) ---
+  async function openTicketPicker() {
+    if (!product?.jiraProjectKey) { setTicketError('이 프로덕트에 Jira 프로젝트 키가 없습니다.'); setTicketOptions([]); setTicketSelected(new Set()); setTicketPickerOpen(true); return }
+    setTicketPickerOpen(true)
+    setTicketLoading(true)
+    setTicketError('')
+    setTicketSelected(new Set())
+    try {
+      const statuses = ticketStatusesFor(product.jiraProjectKey)
+      const res = await authedFetch(`/api/jira-issues?projectKey=${encodeURIComponent(product.jiraProjectKey)}&statuses=${encodeURIComponent(statuses.join(','))}`)
+      const data = await res.json()
+      if (!res.ok) { setTicketError('티켓을 불러오지 못했습니다: ' + JSON.stringify(data.error ?? data)); setTicketOptions([]) }
+      else setTicketOptions(data.issues ?? [])
+    } catch (e) {
+      setTicketError('티켓 조회 실패: ' + String(e)); setTicketOptions([])
+    } finally {
+      setTicketLoading(false)
+    }
+  }
+  async function createGroupsFromTickets() {
+    if (!productId || !suiteId) return
+    const chosen = ticketOptions.filter((t) => ticketSelected.has(t.key) && !caseGroups.some((g) => g.jiraKey === t.key))
+    let order = caseGroups.length
+    for (const t of chosen) {
+      await createCaseGroup({ suiteId, productId, jiraKey: t.key, title: t.summary, ticketLink: t.url, order: order++ })
+    }
+    setCaseGroups(await getCaseGroups(suiteId))
+    setTicketPickerOpen(false)
+    toast({ title: `${chosen.length}개 티켓 그룹 추가됨` })
+  }
+  async function handleDeleteCaseGroup() {
+    if (!deleteCaseGroupTarget || !suiteId) return
+    await deleteCaseGroup(deleteCaseGroupTarget.id)
+    setCaseGroups((prev) => prev.filter((g) => g.id !== deleteCaseGroupTarget.id))
+    setCases((prev) => prev.map((c) => c.groupId === deleteCaseGroupTarget.id ? { ...c, groupId: '' } : c))
+    setDeleteCaseGroupTarget(null)
+    toast({ title: '티켓 그룹 삭제됨 (케이스는 미분류로 이동)' })
   }
 
   // 리치텍스트 HTML들에서 <img src> 추출 (Jira 첨부 전송용)
@@ -368,11 +419,31 @@ export default function TestCasesPage() {
     return groups.filter((g) => g.items.length > 0)
   })()
 
-  // 렌더할 행 목록: 운영이슈는 그룹 첫 행에 헤더 정보를 부착
-  const rowsToRender: Array<{ tc: TestCase; header: { batch: DeployBatch | null; count: number } | null }> =
-    isIssueSuite
-      ? groupedByBatch.flatMap((g) => g.items.map((tc, i) => ({ tc, header: i === 0 ? { batch: g.batch, count: g.items.length } : null })))
-      : filtered.map((tc) => ({ tc, header: null }))
+  // 렌더 단위: 헤더(그룹/배포묶음) 또는 행. 운영이슈=배포묶음, 테스트케이스=티켓 그룹.
+  type RenderUnit =
+    | { type: 'header'; key: string; batch?: DeployBatch | null; group?: CaseGroup | null; count: number; pass: number }
+    | { type: 'row'; tc: TestCase }
+  const renderUnits: RenderUnit[] = (() => {
+    if (isIssueSuite) {
+      const units: RenderUnit[] = []
+      for (const g of groupedByBatch) {
+        units.push({ type: 'header', key: 'b-' + (g.batch?.id ?? '__none__'), batch: g.batch, count: g.items.length, pass: 0 })
+        for (const tc of g.items) units.push({ type: 'row', tc })
+      }
+      return units
+    }
+    // 테스트케이스: 티켓 그룹이 하나도 없으면 평면(헤더 없음)으로
+    if (caseGroups.length === 0) return filtered.map((tc) => ({ type: 'row', tc } as RenderUnit))
+    const units: RenderUnit[] = []
+    const sections: Array<{ group: CaseGroup | null; items: TestCase[] }> = caseGroups.map((g) => ({ group: g, items: filtered.filter((c) => c.groupId === g.id) }))
+    const unassigned = filtered.filter((c) => !c.groupId || !caseGroups.some((g) => g.id === c.groupId))
+    if (unassigned.length) sections.push({ group: null, items: unassigned })
+    for (const s of sections) {
+      units.push({ type: 'header', key: 'g-' + (s.group?.id ?? '__none__'), group: s.group, count: s.items.length, pass: s.items.filter((i) => i.status === 'pass').length })
+      for (const tc of s.items) units.push({ type: 'row', tc })
+    }
+    return units
+  })()
 
   const stats = {
     total: cases.length,
@@ -498,6 +569,7 @@ export default function TestCasesPage() {
         ...data,
         resultNote: '',
         resultImages: [],
+        groupId: createGroupId || '',  // 티켓 그룹의 '+ 케이스 추가'로 열었으면 그 그룹에
         suiteId, productId, order,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       })
@@ -517,6 +589,7 @@ export default function TestCasesPage() {
       }
     }
     setDialogOpen(false)
+    setCreateGroupId('')
     await load()
   }
 
@@ -831,10 +904,15 @@ export default function TestCasesPage() {
             <Button variant="ghost" size="sm" onClick={load} className="text-slate-400 hover:text-slate-600" title="새로고침">
               <RefreshCw className="w-4 h-4" />
             </Button>
+          {!isIssueSuite && isAdmin && (
+            <Button variant="outline" size="sm" className="mr-2" onClick={openTicketPicker}>
+              <Plus className="w-4 h-4 mr-1" /> 티켓 그룹
+            </Button>
+          )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             {isAdmin && (
               <DialogTrigger asChild>
-                <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1" /> {isIssueSuite ? '이슈 등록' : '테스트 추가'}</Button>
+                <Button onClick={() => { setCreateGroupId(''); openCreate() }} size="sm"><Plus className="w-4 h-4 mr-1" /> {isIssueSuite ? '이슈 등록' : '테스트 추가'}</Button>
               </DialogTrigger>
             )}
             {dialogOpen && (
@@ -1030,34 +1108,54 @@ export default function TestCasesPage() {
               )}
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
-              {rowsToRender.map(({ tc, header }) => (
-                <Fragment key={tc.id}>
-                  {/* 배포묶음 그룹 헤더 */}
-                  {header && (
-                    <tr className="bg-slate-50/80 border-t-2 border-slate-200">
-                      <td colSpan={9} className="px-4 py-2">
+              {renderUnits.map((u) => {
+                if (u.type === 'header') {
+                  return (
+                    <tr key={u.key} className="bg-slate-50/80 border-t-2 border-slate-200">
+                      <td colSpan={isIssueSuite ? 9 : 10} className="px-4 py-2">
                         <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                          {header.batch ? (
+                          {u.batch !== undefined ? (
+                            u.batch ? (
+                              <>
+                                <span className={cn('text-xs px-2 py-0.5 rounded-full font-semibold',
+                                  u.batch.status === 'deployed' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700')}>
+                                  {u.batch.status === 'deployed' ? '배포완료' : '배포예정'}
+                                </span>
+                                <span className="text-sm font-bold text-slate-700">📦 {u.batch.name}</span>
+                                {u.batch.deployDate && <span className="text-xs text-slate-500">· {u.batch.deployDate}</span>}
+                                <span className="text-xs text-slate-400">· {u.count}건</span>
+                                {canEditStatus && (
+                                  <div className="flex items-center gap-1 ml-2">
+                                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-slate-500"
+                                      onClick={() => handleToggleBatchStatus(u.batch!)}>
+                                      {u.batch.status === 'deployed' ? '배포예정으로' : '배포완료 처리'}
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-primary"
+                                      onClick={() => { setBatchForm({ name: u.batch!.name, deployDate: u.batch!.deployDate ?? '' }); setBatchEditId(u.batch!.id); setBatchDialogOpen(true) }}>
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-destructive"
+                                      onClick={() => setDeleteBatchTarget(u.batch!)}>
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-sm font-bold text-slate-500">미지정</span>
+                                <span className="text-xs text-slate-400">· {u.count}건</span>
+                              </>
+                            )
+                          ) : u.group ? (
                             <>
-                              <span className={cn('text-xs px-2 py-0.5 rounded-full font-semibold',
-                                header.batch.status === 'deployed' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700')}>
-                                {header.batch.status === 'deployed' ? '배포완료' : '배포예정'}
-                              </span>
-                              <span className="text-sm font-bold text-slate-700">📦 {header.batch.name}</span>
-                              {header.batch.deployDate && <span className="text-xs text-slate-500">· {header.batch.deployDate}</span>}
-                              <span className="text-xs text-slate-400">· {header.count}건</span>
-                              {canEditStatus && (
+                              <a href={u.group.ticketLink} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline" onClick={(e) => e.stopPropagation()}>🎫 {u.group.jiraKey}</a>
+                              <span className="text-sm text-slate-700 truncate max-w-md">{u.group.title}</span>
+                              <span className="text-xs text-slate-400">· 통과 {u.pass}/{u.count}</span>
+                              {isAdmin && (
                                 <div className="flex items-center gap-1 ml-2">
-                                  <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-slate-500"
-                                    onClick={() => handleToggleBatchStatus(header.batch!)}>
-                                    {header.batch.status === 'deployed' ? '배포예정으로' : '배포완료 처리'}
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-primary"
-                                    onClick={() => { setBatchForm({ name: header.batch!.name, deployDate: header.batch!.deployDate ?? '' }); setBatchEditId(header.batch!.id); setBatchDialogOpen(true) }}>
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-destructive"
-                                    onClick={() => setDeleteBatchTarget(header.batch!)}>
+                                  <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-primary" onClick={() => { setCreateGroupId(u.group!.id); openCreate() }}>+ 케이스 추가</Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-destructive" onClick={() => setDeleteCaseGroupTarget(u.group!)}>
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </Button>
                                 </div>
@@ -1065,14 +1163,18 @@ export default function TestCasesPage() {
                             </>
                           ) : (
                             <>
-                              <span className="text-sm font-bold text-slate-500">미지정</span>
-                              <span className="text-xs text-slate-400">· {header.count}건</span>
+                              <span className="text-sm font-bold text-slate-500">미분류</span>
+                              <span className="text-xs text-slate-400">· {u.count}건</span>
                             </>
                           )}
                         </div>
                       </td>
                     </tr>
-                  )}
+                  )
+                }
+                const { tc } = u
+                return (
+                <Fragment key={tc.id}>
                   {/* Main Row */}
                   <tr
                     id={tc.id}
@@ -1469,7 +1571,8 @@ export default function TestCasesPage() {
                     </tr>
                   )}
                 </Fragment>
-              ))}
+                )
+              })}
             </tbody>
           </table>
           </div>
@@ -1771,6 +1874,67 @@ export default function TestCasesPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               삭제
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 티켓 그룹 선택 다이얼로그 */}
+      <Dialog open={ticketPickerOpen} onOpenChange={setTicketPickerOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>티켓 그룹 추가</DialogTitle>
+          </DialogHeader>
+          <div className="py-1">
+            <p className="text-xs text-slate-400 mb-2">
+              {product?.jiraProjectKey
+                ? <>프로젝트 <strong>{product.jiraProjectKey}</strong> · 상태: {ticketStatusesFor(product.jiraProjectKey).join(', ')}</>
+                : 'Jira 프로젝트 키 없음'}
+            </p>
+            {ticketError && <p className="text-sm text-destructive mb-2">{ticketError}</p>}
+            <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
+              {ticketLoading ? (
+                <div className="py-10 text-center text-slate-400 text-sm"><Loader2 className="w-5 h-5 animate-spin inline" /> 불러오는 중...</div>
+              ) : ticketOptions.length === 0 ? (
+                <div className="py-10 text-center text-slate-400 text-sm">불러온 티켓이 없습니다</div>
+              ) : (
+                ticketOptions.map((t) => {
+                  const already = caseGroups.some((g) => g.jiraKey === t.key)
+                  return (
+                    <label key={t.key} className={cn('flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50', already && 'opacity-40 cursor-not-allowed')}>
+                      <Checkbox checked={ticketSelected.has(t.key)} onChange={(c) => {
+                        if (already) return
+                        setTicketSelected((prev) => { const n = new Set(prev); if (c) n.add(t.key); else n.delete(t.key); return n })
+                      }} className="mt-0.5" />
+                      <div className="min-w-0">
+                        <span className="text-xs font-mono text-slate-500">{t.key}</span>
+                        <span className="text-xs text-slate-400 ml-1.5">{t.status}{already && ' · 이미 추가됨'}</span>
+                        <p className="text-sm text-slate-700 break-words">{t.summary}</p>
+                      </div>
+                    </label>
+                  )
+                })
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTicketPickerOpen(false)}>취소</Button>
+            <Button disabled={ticketSelected.size === 0} onClick={createGroupsFromTickets}>{ticketSelected.size}개 추가</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 티켓 그룹 삭제 확인 */}
+      <AlertDialog open={!!deleteCaseGroupTarget} onOpenChange={(o) => { if (!o) setDeleteCaseGroupTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>티켓 그룹 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleteCaseGroupTarget?.jiraKey} {deleteCaseGroupTarget?.title}" 그룹을 삭제하시겠습니까? 소속 테스트케이스는 삭제되지 않고 '미분류'로 이동합니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCaseGroup} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">삭제</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

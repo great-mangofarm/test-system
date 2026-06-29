@@ -1,5 +1,14 @@
 import type { Priority, TestStatus, ProcessingStatus, UserRole, QaStatus } from '@/types'
 
+// 테스트케이스 티켓 그룹 추가 시 불러올 Jira 상태 (프로젝트키별). 기본 '테스트중', APP만 +'배포대기'
+export const QA_TICKET_STATUSES_DEFAULT = ['테스트중']
+export const QA_TICKET_STATUSES_BY_PROJECT: Record<string, string[]> = {
+  APP: ['테스트중', '배포대기'],
+}
+export function ticketStatusesFor(projectKey?: string): string[] {
+  return (projectKey && QA_TICKET_STATUSES_BY_PROJECT[projectKey]) || QA_TICKET_STATUSES_DEFAULT
+}
+
 export const QA_STATUS_LABELS: Record<QaStatus, string> = {
   pass: '통과',
   block: '블록',

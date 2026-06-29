@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck } from '@/types'
+import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck, CaseGroup } from '@/types'
 
 // --- Users ---
 export async function getUsers(): Promise<UserProfile[]> {
@@ -99,6 +99,28 @@ export async function updateDeployBatch(id: string, data: Partial<DeployBatch>):
 
 export async function deleteDeployBatch(id: string): Promise<void> {
   await deleteDoc(doc(db, 'deployBatches', id))
+}
+
+// --- Case Groups (테스트케이스 묶음 내부 티켓 그룹) ---
+export async function getCaseGroups(suiteId: string): Promise<CaseGroup[]> {
+  const snap = await getDocs(query(collection(db, 'caseGroups'), where('suiteId', '==', suiteId)))
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CaseGroup))
+  return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
+}
+export async function createCaseGroup(data: Omit<CaseGroup, 'id' | 'createdAt'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'caseGroups'), { ...data, createdAt: new Date().toISOString() })
+  return ref.id
+}
+export async function updateCaseGroup(id: string, data: Partial<CaseGroup>): Promise<void> {
+  await updateDoc(doc(db, 'caseGroups', id), data)
+}
+export async function deleteCaseGroup(id: string): Promise<void> {
+  // 그룹 삭제 시 소속 테스트케이스는 미분류로 (groupId 비움)
+  const snap = await getDocs(query(collection(db, 'testcases'), where('groupId', '==', id)))
+  const batch = writeBatch(db)
+  snap.docs.forEach((d) => batch.update(d.ref, { groupId: '' }))
+  batch.delete(doc(db, 'caseGroups', id))
+  await batch.commit()
 }
 
 // --- QA Groups (배포예정 기능별 QA 테스트 묶음) ---

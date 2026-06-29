@@ -63,5 +63,10 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update, delete: if isEditor();
     }
+
+    match /caseGroups/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isEditor();
+    }
   }
 }

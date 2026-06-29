@@ -36,7 +36,7 @@ export async function requireAuth(
     res.status(401).json({ error: 'unauthorized' })
     return null
   }
-  if (opts?.adminOrDev && user.role !== 'admin' && user.role !== 'developer') {
+  if (opts?.adminOrDev && user.role !== 'admin' && user.role !== 'pm' && user.role !== 'developer') {
     res.status(403).json({ error: 'forbidden' })
     return null
   }

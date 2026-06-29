@@ -34,6 +34,18 @@ export type DeployBatchStatus = 'planned' | 'deployed'
 // QA 테스트 (배포예정 기능별 가벼운 체크) — 테스트케이스/운영이슈와 별개
 export type QaStatus = 'pass' | 'block' | 'pending'
 
+// 테스트케이스(qa) 묶음 내부의 티켓 단위 그룹
+export interface CaseGroup {
+  id: string
+  suiteId: string
+  productId: string
+  jiraKey: string      // 예: APP-720
+  title: string        // 티켓 제목
+  ticketLink: string   // 전체 URL
+  order: number
+  createdAt: string
+}
+
 export interface QaGroup {
   id: string
   productId: string
@@ -113,4 +125,5 @@ export interface TestCase {
   testChecklist?: Array<{ text: string; checked: boolean }> // 테스트 체크리스트
   testProgressNote?: string // 테스트 진행사항
   deployBatchId?: string    // 배포묶음 ID (운영이슈 전용)
+  groupId?: string          // 티켓 그룹 ID (테스트케이스 전용)
 }
