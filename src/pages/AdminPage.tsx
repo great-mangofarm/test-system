@@ -16,12 +16,14 @@ import { ChevronLeft, LogOut, Users, RotateCcw, Trash2, Check } from 'lucide-rea
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
+  pm: 'PM',
   developer: '개발자',
   staff: '스태프',
 }
 
 const ROLE_BADGE: Record<UserRole, string> = {
   admin: 'bg-red-100 text-red-700 border border-red-200',
+  pm: 'bg-amber-100 text-amber-700 border border-amber-200',
   developer: 'bg-blue-100 text-blue-700 border border-blue-200',
   staff: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
 }
@@ -255,6 +257,7 @@ export default function AdminPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">관리자</SelectItem>
+                        <SelectItem value="pm">PM</SelectItem>
                         <SelectItem value="developer">개발자</SelectItem>
                         <SelectItem value="staff">스태프</SelectItem>
                       </SelectContent>

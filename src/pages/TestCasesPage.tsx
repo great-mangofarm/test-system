@@ -173,8 +173,8 @@ export default function TestCasesPage() {
   const { productId, suiteId } = useParams<{ productId: string; suiteId: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'developer'
-  const canEditStatus = user?.role === 'admin' || user?.role === 'developer'
+  const isAdmin = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'developer'
+  const canEditStatus = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'developer'
   const [product, setProduct] = useState<Product | null>(null)
   const [suite, setSuite] = useState<TestSuite | null>(null)
   const [cases, setCases] = useState<TestCase[]>([])

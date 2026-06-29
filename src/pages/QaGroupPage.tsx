@@ -20,7 +20,7 @@ export default function QaGroupPage() {
   const { productId, groupId } = useParams<{ productId: string; groupId: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin' || user?.role === 'developer'
+  const canEdit = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'developer'
 
   const [group, setGroup] = useState<QaGroup | null>(null)
   const [checks, setChecks] = useState<QaCheck[]>([])

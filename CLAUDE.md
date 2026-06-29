@@ -131,24 +131,26 @@ interface TestCase {
 | Role | 설명 | 주요 권한 |
 |------|------|----------|
 | `admin` | 관리자 | 모든 권한 + 프로덕트/묶음 관리 + 사용자 관리 |
-| `developer` | 개발자 | 이슈/테스트케이스 등록·수정·삭제 + Jira. **프로덕트/묶음 관리 X, AdminPage X** |
+| `pm` | PM | **관리자와 동일하되 사용자 관리(AdminPage)만 제외** — 구조 관리 O |
+| `developer` | 개발자 | 이슈/테스트케이스/QA 등록·수정·삭제 + Jira. **프로덕트/묶음 구조 관리 X, AdminPage X** |
 | `staff` | 스태프 (기본 가입 role) | 조회 위주 (현재 편집 권한 없음) |
 
 > `viewer`는 폐지됨 — AdminPage 진입 시 기존 viewer 계정은 자동으로 staff로 이관.
 
-**코드 내 권한 체크 패턴:**
+**코드 내 권한 체크 패턴 (3단계):**
 ```typescript
-// 이슈/테스트케이스 편집 (admin + developer)
-const isAdmin = user?.role === 'admin' || user?.role === 'developer'
-const canEditStatus = user?.role === 'admin' || user?.role === 'developer'
+// 콘텐츠 편집 (이슈/테스트케이스/QA) — admin·pm·developer
+const isAdmin = ['admin','pm','developer'].includes(user?.role)
+const canEditStatus = isAdmin
 
-// 프로덕트/묶음 구조 관리 (admin 전용) — HomePage
-const canManageProduct = user?.role === 'admin'
-const canManageSuite = user?.role === 'admin'
+// 프로덕트/묶음 구조 관리 — admin·pm (developer X)
+const canManageProduct = user?.role === 'admin' || user?.role === 'pm'
+const canManageSuite   = user?.role === 'admin' || user?.role === 'pm'
 
-// App.tsx — AdminPage 라우트 가드 / 헤더 사용자관리 버튼도 admin 전용
+// App.tsx — AdminPage 라우트 가드 / 헤더 사용자관리 버튼 = admin 전용
 if (user.role !== 'admin') return <Navigate to="/" replace />
 ```
+> Firestore 규칙도 3단계: `isManager()`(admin·pm, 프로덕트/묶음), `isEditor()`(admin·pm·developer, testcases/deployBatches/qaGroups/qaChecks), `isAdmin()`(users).
 
 > **권한은 Firestore 보안 규칙(`firestore.rules`)으로 서버에서 강제** — 클라이언트 체크는 UI 가림일 뿐. 규칙 변경 시 Firebase 콘솔에서 게시해야 적용됨.
 

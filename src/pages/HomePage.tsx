@@ -357,10 +357,11 @@ function SortableSuite({
 
 export default function HomePage() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'developer'
-  // 프로덕트/묶음 생성·수정·삭제·순서변경은 관리자(admin)만 — 개발자(developer)는 불가
-  const canManageProduct = user?.role === 'admin'
-  const canManageSuite = user?.role === 'admin'
+  // 콘텐츠(이슈/테스트케이스/QA) 편집 권한 — admin·pm·developer
+  const isAdmin = user?.role === 'admin' || user?.role === 'pm' || user?.role === 'developer'
+  // 프로덕트/묶음 구조 관리 — admin·pm (developer는 불가)
+  const canManageProduct = user?.role === 'admin' || user?.role === 'pm'
+  const canManageSuite = user?.role === 'admin' || user?.role === 'pm'
   const navigate = useNavigate()
 
   const [products, setProducts] = useState<Product[]>([])

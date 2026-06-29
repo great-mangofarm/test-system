@@ -15,7 +15,10 @@ service cloud.firestore {
     }
     function signedIn()     { return request.auth != null; }
     function isAdmin()      { return signedIn() && roleOf() == 'admin'; }
-    function isAdminOrDev() { return signedIn() && (roleOf() == 'admin' || roleOf() == 'developer'); }
+    // 구조 관리(프로덕트/묶음): admin·pm
+    function isManager()    { return signedIn() && (roleOf() == 'admin' || roleOf() == 'pm'); }
+    // 콘텐츠 편집(이슈/테스트케이스/QA): admin·pm·developer
+    function isEditor()     { return signedIn() && (roleOf() == 'admin' || roleOf() == 'pm' || roleOf() == 'developer'); }
 
     match /users/{uid} {
       allow read:   if signedIn();
@@ -33,32 +36,32 @@ service cloud.firestore {
 
     match /products/{id} {
       allow read:  if signedIn();
-      allow write: if isAdmin();
+      allow write: if isManager();
     }
 
     match /suites/{id} {
       allow read:  if signedIn();
-      allow write: if isAdmin();
+      allow write: if isManager();
     }
 
     match /testcases/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdminOrDev();
+      allow create, update, delete: if isEditor();
     }
 
     match /deployBatches/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdminOrDev();
+      allow create, update, delete: if isEditor();
     }
 
     match /qaGroups/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdminOrDev();
+      allow create, update, delete: if isEditor();
     }
 
     match /qaChecks/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdminOrDev();
+      allow create, update, delete: if isEditor();
     }
   }
 }

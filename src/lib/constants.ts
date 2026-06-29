@@ -14,6 +14,7 @@ export const QA_STATUS_COLORS: Record<QaStatus, string> = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',
+  pm: 'PM',
   developer: '개발자',
   staff: '스태프',
 }
@@ -26,7 +27,7 @@ export const VIEW_CONTROL_ROLES: UserRole[] = ['staff']
 // - visibleRoles 미설정(undefined): 전체 공개 (하위호환)
 // - 그 외: 배열에 역할이 포함될 때만 true
 export function canViewByRole(visibleRoles: UserRole[] | undefined, role: UserRole | undefined): boolean {
-  if (role === 'admin' || role === 'developer') return true
+  if (role === 'admin' || role === 'pm' || role === 'developer') return true
   if (!visibleRoles) return true
   if (!role) return false
   return visibleRoles.includes(role)
