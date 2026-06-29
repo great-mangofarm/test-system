@@ -195,6 +195,7 @@ export default function TestCasesPage() {
   const [batchFilter, setBatchFilter] = useState<string>('all') // 'all' | batchId | '__none__'
   const [batchDialogOpen, setBatchDialogOpen] = useState(false)
   const [batchDialogAssignTo, setBatchDialogAssignTo] = useState<string | null>(null) // 생성 후 이 이슈의 편집버퍼에 배정
+  const [batchEditId, setBatchEditId] = useState<string | null>(null) // 배포묶음 수정 모드
   const [batchForm, setBatchForm] = useState({ name: '', deployDate: '' })
   const [deleteBatchTarget, setDeleteBatchTarget] = useState<DeployBatch | null>(null)
 
@@ -276,6 +277,27 @@ export default function TestCasesPage() {
     }
   }
 
+  // 리치텍스트 HTML들에서 <img src> 추출 (Jira 첨부 전송용)
+  function collectImages(images: string[], ...htmls: (string | undefined)[]): string[] {
+    const set = new Set<string>(images ?? [])
+    for (const html of htmls) {
+      if (!html) continue
+      const re = /<img[^>]+src="([^"]+)"/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(html))) set.add(m[1])
+    }
+    return [...set]
+  }
+
+  // 에디터에 업로드된 이미지를 이슈 첨부목록(images)에도 즉시 등록
+  async function addIssueImage(id: string, url: string) {
+    const tc = cases.find((c) => c.id === id)
+    if (!tc || (tc.images ?? []).includes(url)) return
+    const next = [...(tc.images ?? []), url]
+    await updateTestCase(id, { images: next })
+    setCases((prev) => prev.map((c) => c.id === id ? { ...c, images: next } : c))
+  }
+
   // --- 배포묶음 관리 ---
   async function handleCreateBatch(name: string, deployDate: string) {
     if (!suiteId) return
@@ -283,6 +305,11 @@ export default function TestCasesPage() {
     setBatches(await getDeployBatches(suiteId))
     toast({ title: '배포묶음이 생성되었습니다' })
     return id
+  }
+  async function handleUpdateBatch(id: string, name: string, deployDate: string) {
+    await updateDeployBatch(id, { name: name.trim(), deployDate })
+    setBatches((prev) => prev.map((b) => b.id === id ? { ...b, name: name.trim(), deployDate } : b))
+    toast({ title: '배포묶음이 수정되었습니다' })
   }
   async function handleToggleBatchStatus(batch: DeployBatch) {
     const next: DeployBatch['status'] = batch.status === 'planned' ? 'deployed' : 'planned'
@@ -526,7 +553,7 @@ export default function TestCasesPage() {
       actualResult: '',
       developerNote: '',
       tester: '',
-      images: [],
+      images: collectImages(data.images ?? [], data.background, data.requirements, data.featureSpec),
       resultNote: '',
       resultImages: [],
       planningLink: '',
@@ -577,6 +604,7 @@ export default function TestCasesPage() {
             requirements: data.requirements,
             figmaLink: data.figmaLink,
             featureSpec: data.featureSpec,
+            images: collectImages(data.images ?? [], data.background, data.requirements, data.featureSpec),
           }),
         })
         const resJson = await res.json()
@@ -673,6 +701,7 @@ export default function TestCasesPage() {
           steps: tc.steps,
           expectedResult: tc.expectedResult,
           actualResult: tc.actualResult,
+          images: collectImages(tc.images ?? [], tc.background, tc.requirements, tc.featureSpec),
         }),
       })
       const data = await res.json()
@@ -924,7 +953,7 @@ export default function TestCasesPage() {
             </Select>
             {canEditStatus && (
               <Button variant="outline" size="sm" className="h-8 text-xs"
-                onClick={() => { setBatchForm({ name: '', deployDate: '' }); setBatchDialogOpen(true) }}>
+                onClick={() => { setBatchForm({ name: '', deployDate: '' }); setBatchEditId(null); setBatchDialogAssignTo(null); setBatchDialogOpen(true) }}>
                 <Plus className="w-3.5 h-3.5 mr-1" /> 배포묶음
               </Button>
             )}
@@ -1022,6 +1051,10 @@ export default function TestCasesPage() {
                                   <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-slate-500"
                                     onClick={() => handleToggleBatchStatus(header.batch!)}>
                                     {header.batch.status === 'deployed' ? '배포예정으로' : '배포완료 처리'}
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-primary"
+                                    onClick={() => { setBatchForm({ name: header.batch!.name, deployDate: header.batch!.deployDate ?? '' }); setBatchEditId(header.batch!.id); setBatchDialogOpen(true) }}>
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </Button>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-destructive"
                                     onClick={() => setDeleteBatchTarget(header.batch!)}>
@@ -1523,7 +1556,7 @@ export default function TestCasesPage() {
                   <p className="text-xs text-slate-400 mb-1">배포묶음</p>
                   {canEditStatus ? (
                     <Select value={(f.deployBatchId as string) || '__none__'} onValueChange={(v) => {
-                      if (v === '__new__') { setBatchForm({ name: '', deployDate: '' }); setBatchDialogAssignTo(tc.id); setBatchDialogOpen(true); return }
+                      if (v === '__new__') { setBatchForm({ name: '', deployDate: '' }); setBatchEditId(null); setBatchDialogAssignTo(tc.id); setBatchDialogOpen(true); return }
                       setF('deployBatchId', v === '__none__' ? '' : v)
                     }}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="미지정" /></SelectTrigger>
@@ -1548,6 +1581,14 @@ export default function TestCasesPage() {
                         </Button>}
                   </div>
                 </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-400 mb-1">피그마 링크</p>
+                  {isAdmin ? (
+                    <Input className="h-8 text-xs" placeholder="https://www.figma.com/..." value={(f.figmaLink as string) ?? ''} onChange={(e) => setF('figmaLink', e.target.value)} />
+                  ) : tc.figmaLink ? (
+                    <a href={tc.figmaLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-xs hover:underline"><ExternalLink className="w-3 h-3 shrink-0"/>{tc.figmaLink}</a>
+                  ) : <p className="text-sm text-slate-300">—</p>}
+                </div>
               </div>
 
               {/* 콘텐츠 2컬럼 */}
@@ -1555,22 +1596,17 @@ export default function TestCasesPage() {
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-slate-400 mb-1">개요</p>
-                    <RichTextEditor value={(f.background as string) ?? ''} onChange={(v) => setF('background', v)} placeholder="프로젝트 배경 및 개발 목적" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
+                    <RichTextEditor value={(f.background as string) ?? ''} onChange={(v) => setF('background', v)} onImageUploaded={(url) => addIssueImage(tc.id, url)} onImageClick={setLightbox} placeholder="프로젝트 배경 및 개발 목적" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 mb-1">기능 / 화면 정의</p>
-                    {isAdmin && <div className="mb-1">
-                      <p className="text-xs text-slate-400">피그마 링크</p>
-                      <Input className="h-7 text-xs mb-1" placeholder="https://www.figma.com/..." value={(f.figmaLink as string) ?? ''} onChange={(e) => setF('figmaLink', e.target.value)} />
-                    </div>}
-                    {!isAdmin && tc.figmaLink && <a href={tc.figmaLink} target="_blank" rel="noopener noreferrer" className="text-primary flex items-center gap-1 text-xs mb-1 hover:underline"><ExternalLink className="w-3 h-3"/>{tc.figmaLink}</a>}
-                    <RichTextEditor value={(f.featureSpec as string) ?? ''} onChange={(v) => setF('featureSpec', v)} placeholder="화면 구성 및 기능 상세 정의" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
+                    <RichTextEditor value={(f.featureSpec as string) ?? ''} onChange={(v) => setF('featureSpec', v)} onImageUploaded={(url) => addIssueImage(tc.id, url)} onImageClick={setLightbox} placeholder="화면 구성 및 기능 상세 정의" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-slate-400 mb-1">범위 및 요구사항</p>
-                    <RichTextEditor value={(f.requirements as string) ?? ''} onChange={(v) => setF('requirements', v)} placeholder="요구사항 및 범위" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
+                    <RichTextEditor value={(f.requirements as string) ?? ''} onChange={(v) => setF('requirements', v)} onImageUploaded={(url) => addIssueImage(tc.id, url)} onImageClick={setLightbox} placeholder="요구사항 및 범위" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[140px]" />
                   </div>
                   <div>
                     <p className="text-xs text-emerald-600 font-medium mb-2">테스트 체크리스트</p>
@@ -1592,7 +1628,7 @@ export default function TestCasesPage() {
                   </div>
                   <div>
                     <p className="text-xs text-amber-500 font-medium mb-1">테스트 진행사항</p>
-                    <RichTextEditor value={(f.testProgressNote as string) ?? ''} onChange={(v) => setF('testProgressNote', v)} placeholder="테스트 진행사항 입력" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[100px]" />
+                    <RichTextEditor value={(f.testProgressNote as string) ?? ''} onChange={(v) => setF('testProgressNote', v)} onImageUploaded={(url) => addIssueImage(tc.id, url)} onImageClick={setLightbox} placeholder="테스트 진행사항 입력" readOnly={!isAdmin} className="[&_.tiptap]:min-h-[100px]" />
                   </div>
                 </div>
               </div>
@@ -1603,6 +1639,8 @@ export default function TestCasesPage() {
                 <RichTextEditor
                   value={(f.devChangelog as string) ?? ''}
                   onChange={(v) => setF('devChangelog', v)}
+                  onImageUploaded={(url) => addIssueImage(tc.id, url)}
+                  onImageClick={setLightbox}
                   placeholder="개발 변경 내역을 입력하세요..." readOnly={!canEditStatus} className="[&_.tiptap]:min-h-[100px]" />
               </div>
 
@@ -1678,11 +1716,11 @@ export default function TestCasesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 배포묶음 생성 다이얼로그 */}
-      <Dialog open={batchDialogOpen} onOpenChange={(o) => { setBatchDialogOpen(o); if (!o) setBatchDialogAssignTo(null) }}>
+      {/* 배포묶음 생성/수정 다이얼로그 */}
+      <Dialog open={batchDialogOpen} onOpenChange={(o) => { setBatchDialogOpen(o); if (!o) { setBatchDialogAssignTo(null); setBatchEditId(null) } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>새 배포묶음</DialogTitle>
+            <DialogTitle>{batchEditId ? '배포묶음 수정' : '새 배포묶음'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -1700,13 +1738,18 @@ export default function TestCasesPage() {
             <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>취소</Button>
             <Button disabled={!batchForm.name.trim()}
               onClick={async () => {
-                const id = await handleCreateBatch(batchForm.name, batchForm.deployDate)
-                // 드로어에서 호출됐으면 새 묶음을 편집버퍼에 배정(변경사항 저장 시 반영)
-                if (id && batchDialogAssignTo) setInlineForm((p) => ({ ...p, deployBatchId: id }))
+                if (batchEditId) {
+                  await handleUpdateBatch(batchEditId, batchForm.name, batchForm.deployDate)
+                } else {
+                  const id = await handleCreateBatch(batchForm.name, batchForm.deployDate)
+                  // 드로어에서 호출됐으면 새 묶음을 편집버퍼에 배정(변경사항 저장 시 반영)
+                  if (id && batchDialogAssignTo) setInlineForm((p) => ({ ...p, deployBatchId: id }))
+                }
                 setBatchDialogOpen(false)
                 setBatchDialogAssignTo(null)
+                setBatchEditId(null)
               }}>
-              생성
+              {batchEditId ? '저장' : '생성'}
             </Button>
           </DialogFooter>
         </DialogContent>

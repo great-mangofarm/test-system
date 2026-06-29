@@ -26,6 +26,7 @@ export type IssueFormData = {
   testChecklistItems: string[]
   testProgressNote: string
   deployBatchId: string
+  images: string[]
 }
 
 interface Props {
@@ -57,6 +58,7 @@ const defaultForm: IssueFormData = {
   testChecklistItems: [],
   testProgressNote: '',
   deployBatchId: '',
+  images: [],
 }
 
 export function IssueForm({ initial, users = [], areas, batches = [], jiraProjectKey, onSave, onCancel }: Props) {
@@ -68,6 +70,10 @@ export function IssueForm({ initial, users = [], areas, batches = [], jiraProjec
   function set<K extends keyof IssueFormData>(key: K, value: IssueFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
+
+  // 에디터 업로드 이미지를 폼 images에 누적 (등록 시 첨부 + Jira 전송)
+  const addImage = (url: string) =>
+    setForm((f) => ({ ...f, images: f.images.includes(url) ? f.images : [...f.images, url] }))
 
   function addChecklistItem() {
     set('testChecklistItems', [...form.testChecklistItems, ''])
@@ -235,6 +241,7 @@ export function IssueForm({ initial, users = [], areas, batches = [], jiraProjec
               <RichTextEditor
                 value={form.background}
                 onChange={(v) => set('background', v)}
+                onImageUploaded={addImage}
                 placeholder="프로젝트 배경 및 이 요청의 목적을 설명해주세요"
                 className="[&_.tiptap]:min-h-[160px]"
               />
@@ -244,6 +251,7 @@ export function IssueForm({ initial, users = [], areas, batches = [], jiraProjec
               <RichTextEditor
                 value={form.featureSpec}
                 onChange={(v) => set('featureSpec', v)}
+                onImageUploaded={addImage}
                 placeholder="화면 구성 및 기능 상세 정의를 입력해주세요"
                 className="[&_.tiptap]:min-h-[200px]"
               />
@@ -257,6 +265,7 @@ export function IssueForm({ initial, users = [], areas, batches = [], jiraProjec
               <RichTextEditor
                 value={form.requirements}
                 onChange={(v) => set('requirements', v)}
+                onImageUploaded={addImage}
                 placeholder="요구사항과 범위를 입력하세요 (목록 사용 가능)"
                 className="[&_.tiptap]:min-h-[160px]"
               />

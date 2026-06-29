@@ -15,6 +15,8 @@ interface Props {
   value: string
   onChange: (html: string) => void
   onBlur?: (html: string) => void
+  onImageUploaded?: (url: string) => void  // 업로드된 이미지 URL (첨부목록 등록용)
+  onImageClick?: (url: string) => void     // 본문 이미지 클릭 → 확대(lightbox)
   placeholder?: string
   className?: string
   readOnly?: boolean
@@ -43,7 +45,7 @@ function ToolbarButton({
   )
 }
 
-export function RichTextEditor({ value, onChange, onBlur, placeholder, className, readOnly = false }: Props) {
+export function RichTextEditor({ value, onChange, onBlur, onImageUploaded, onImageClick, placeholder, className, readOnly = false }: Props) {
   const editorRef = useRef<Editor | null>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -56,6 +58,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
       for (const file of images) {
         const url = await uploadImage(file)
         editorRef.current?.chain().focus().setImage({ src: url }).run()
+        onImageUploaded?.(url)
       }
     } catch {
       toast({ variant: 'destructive', title: '이미지 업로드 실패' })
@@ -90,6 +93,13 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
         event.preventDefault()
         uploadAndInsert(files)
         return true
+      },
+      handleClickOn: (_view, _pos, node) => {
+        if (node?.type?.name === 'image' && onImageClick) {
+          onImageClick(node.attrs.src)
+          return true
+        }
+        return false
       },
     },
     onUpdate: ({ editor }) => {
@@ -126,8 +136,13 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           '[&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm',
           '[&_p]:text-xs [&_li]:text-xs',
           '[&_img]:max-w-full [&_img]:rounded [&_img]:my-1',
+          onImageClick && '[&_img]:cursor-zoom-in',
           className,
         )}
+        onClick={(e) => {
+          const t = e.target as HTMLElement
+          if (t.tagName === 'IMG' && onImageClick) onImageClick((t as HTMLImageElement).src)
+        }}
         dangerouslySetInnerHTML={{ __html: value || '<span class="text-slate-300">—</span>' }}
       />
     )
@@ -222,6 +237,7 @@ export function RichTextEditor({ value, onChange, onBlur, placeholder, className
           '[&_.tiptap]:break-words [&_.tiptap]:[overflow-wrap:anywhere]',
           '[&_.tiptap]:text-xs [&_.tiptap_p]:text-xs [&_.tiptap_li]:text-xs',
           '[&_.tiptap_img]:max-w-full [&_.tiptap_img]:rounded [&_.tiptap_img]:my-1',
+          onImageClick && '[&_.tiptap_img]:cursor-zoom-in',
           '[&_.tiptap_img.ProseMirror-selectednode]:outline [&_.tiptap_img.ProseMirror-selectednode]:outline-2 [&_.tiptap_img.ProseMirror-selectednode]:outline-primary',
           '[&_.tiptap_ul]:list-disc [&_.tiptap_ul]:pl-5 [&_.tiptap_ul]:my-1',
           '[&_.tiptap_ol]:list-decimal [&_.tiptap_ol]:pl-5 [&_.tiptap_ol]:my-1',
