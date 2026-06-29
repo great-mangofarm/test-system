@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import HomePage from './pages/HomePage'
 import TestCasesPage from './pages/TestCasesPage'
+import QaGroupPage from './pages/QaGroupPage'
 import AdminPage from './pages/AdminPage'
 import { Toaster } from './components/ui/toaster'
 
@@ -31,6 +32,7 @@ function AppRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/" element={<RequireAuth><HomePage /></RequireAuth>} />
       <Route path="/products/:productId/suites/:suiteId" element={<RequireAuth><TestCasesPage /></RequireAuth>} />
+      <Route path="/products/:productId/qa/:groupId" element={<RequireAuth><QaGroupPage /></RequireAuth>} />
       <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

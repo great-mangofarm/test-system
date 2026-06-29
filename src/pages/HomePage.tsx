@@ -28,11 +28,12 @@ import { Switch } from '@/components/ui/switch'
 import {
   getProducts, createProduct, updateProduct, deleteProduct, reorderProducts,
   getSuites, createSuite, updateSuite, deleteSuite, reorderSuites, getSuiteStats,
+  getQaGroups, createQaGroup, updateQaGroup, deleteQaGroup,
   type SuiteStats,
 } from '@/lib/firestore'
 import { ROLE_LABELS, VIEW_CONTROL_ROLES, canViewByRole } from '@/lib/constants'
 import { useAuth, logout, deleteAccount } from '@/store/auth'
-import type { Product, TestSuite, SuiteType, UserRole } from '@/types'
+import type { Product, TestSuite, SuiteType, UserRole, QaGroup } from '@/types'
 import {
   Plus, Package, ClipboardList, ArrowRight, Pencil, Trash2,
   LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X, Lock, Eye, EyeOff,
@@ -382,6 +383,13 @@ export default function HomePage() {
   const [suiteSaving, setSuiteSaving] = useState(false)
   const [deleteSuite_, setDeleteSuite_] = useState<TestSuite | null>(null)
 
+  // QA 테스트 (배포예정 기능별)
+  const [qaGroups, setQaGroups] = useState<QaGroup[]>([])
+  const [qaDialog, setQaDialog] = useState<{ mode: 'create' | 'edit'; target?: QaGroup } | null>(null)
+  const [qaForm, setQaForm] = useState({ name: '', deployDate: '' })
+  const [qaSaving, setQaSaving] = useState(false)
+  const [deleteQaGroup_, setDeleteQaGroup_] = useState<QaGroup | null>(null)
+
   const [pwModalOpen, setPwModalOpen] = useState(false)
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
 
@@ -413,9 +421,39 @@ export default function HomePage() {
 
   useEffect(() => { loadProducts() }, [])
   useEffect(() => {
-    if (selectedProduct) loadSuites(selectedProduct.id)
-    else setSuites([])
+    if (selectedProduct) { loadSuites(selectedProduct.id); loadQaGroups(selectedProduct.id) }
+    else { setSuites([]); setQaGroups([]) }
   }, [selectedProduct])
+
+  async function loadQaGroups(productId: string) {
+    try { setQaGroups(await getQaGroups(productId)) } catch { setQaGroups([]) }
+  }
+
+  // QA 테스트 묶음 CRUD
+  function openQaCreate() { setQaForm({ name: '', deployDate: '' }); setQaDialog({ mode: 'create' }) }
+  function openQaEdit(g: QaGroup) { setQaForm({ name: g.name, deployDate: g.deployDate ?? '' }); setQaDialog({ mode: 'edit', target: g }) }
+  async function handleQaSave() {
+    if (!qaForm.name.trim() || !selectedProduct) return
+    setQaSaving(true)
+    try {
+      if (qaDialog?.mode === 'edit' && qaDialog.target) {
+        await updateQaGroup(qaDialog.target.id, { name: qaForm.name.trim(), deployDate: qaForm.deployDate })
+        toast({ title: 'QA 테스트 수정 완료' })
+      } else {
+        await createQaGroup({ productId: selectedProduct.id, name: qaForm.name.trim(), deployDate: qaForm.deployDate }, qaGroups.length)
+        toast({ title: 'QA 테스트 생성 완료' })
+      }
+      setQaDialog(null)
+      await loadQaGroups(selectedProduct.id)
+    } finally { setQaSaving(false) }
+  }
+  async function handleQaDelete() {
+    if (!deleteQaGroup_ || !selectedProduct) return
+    await deleteQaGroup(deleteQaGroup_.id)
+    toast({ title: 'QA 테스트 삭제됨', variant: 'destructive' })
+    setDeleteQaGroup_(null)
+    await loadQaGroups(selectedProduct.id)
+  }
 
   async function loadProducts() {
     setLoadingProducts(true)
@@ -645,6 +683,52 @@ export default function HomePage() {
           </div>
         </aside>
 
+        {/* Middle: QA 테스트 */}
+        {selectedProduct && (
+          <aside className="w-56 bg-white border-r flex flex-col shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">QA 테스트</span>
+              {isAdmin && (
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openQaCreate} title="QA 테스트 묶음 추가">
+                  <Plus className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+              {qaGroups.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs px-2">
+                  {isAdmin
+                    ? <button className="text-primary hover:underline" onClick={openQaCreate}>+ QA 테스트 추가</button>
+                    : 'QA 테스트 없음'}
+                </div>
+              ) : (
+                qaGroups.map((g) => (
+                  <div
+                    key={g.id}
+                    className="group bg-white border rounded-lg px-3 py-2.5 cursor-pointer hover:shadow-sm hover:border-primary/40 transition"
+                    onClick={() => navigate(`/products/${selectedProduct.id}/qa/${g.id}`)}
+                  >
+                    <div className="flex items-start justify-between gap-1.5">
+                      <span className="text-sm font-medium text-slate-700 break-words min-w-0">{g.name}</span>
+                      {isAdmin && (
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
+                          <button className="p-0.5 rounded hover:bg-slate-100 text-slate-400" onClick={(e) => { e.stopPropagation(); openQaEdit(g) }}>
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button className="p-0.5 rounded hover:bg-red-50 text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteQaGroup_(g) }}>
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {g.deployDate && <p className="text-[11px] text-slate-400 mt-0.5">{g.deployDate}</p>}
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
+        )}
+
         {/* Right: Suites */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-6 py-3 border-b bg-white shrink-0">
@@ -858,6 +942,46 @@ export default function HomePage() {
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={handleSuiteDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* QA 테스트 묶음 생성/수정 */}
+      <Dialog open={!!qaDialog} onOpenChange={(o) => !o && setQaDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{qaDialog?.mode === 'edit' ? 'QA 테스트 수정' : '새 QA 테스트'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>이름 * <span className="text-xs text-slate-400 font-normal">— 배포예정 기능명 등</span></Label>
+              <Input placeholder="예: 출하요청 개선" value={qaForm.name}
+                onChange={(e) => setQaForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
+            </div>
+            <div className="space-y-2">
+              <Label>배포 예정일</Label>
+              <input type="date" className="h-9 w-full px-3 text-sm border rounded-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={qaForm.deployDate} onChange={(e) => setQaForm((f) => ({ ...f, deployDate: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQaDialog(null)}>취소</Button>
+            <Button onClick={handleQaSave} disabled={!qaForm.name.trim() || qaSaving}>
+              {qaSaving ? '저장 중...' : (qaDialog?.mode === 'edit' ? '저장' : '생성')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteQaGroup_} onOpenChange={(o) => !o && setDeleteQaGroup_(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>QA 테스트 삭제</AlertDialogTitle>
+            <AlertDialogDescription>"{deleteQaGroup_?.name}"과 그 안의 모든 체크 항목을 삭제하시겠습니까?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleQaDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">삭제</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -1,4 +1,16 @@
-import type { Priority, TestStatus, ProcessingStatus, UserRole } from '@/types'
+import type { Priority, TestStatus, ProcessingStatus, UserRole, QaStatus } from '@/types'
+
+export const QA_STATUS_LABELS: Record<QaStatus, string> = {
+  pass: '통과',
+  block: '블록',
+  pending: '미확인',
+}
+
+export const QA_STATUS_COLORS: Record<QaStatus, string> = {
+  pass: 'bg-green-600 text-white',
+  block: 'bg-red-600 text-white',
+  pending: 'bg-slate-200 text-slate-600',
+}
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: '관리자',

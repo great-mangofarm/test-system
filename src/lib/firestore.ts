@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Product, TestSuite, TestCase, UserProfile, DeployBatch } from '@/types'
+import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck } from '@/types'
 
 // --- Users ---
 export async function getUsers(): Promise<UserProfile[]> {
@@ -99,6 +99,45 @@ export async function updateDeployBatch(id: string, data: Partial<DeployBatch>):
 
 export async function deleteDeployBatch(id: string): Promise<void> {
   await deleteDoc(doc(db, 'deployBatches', id))
+}
+
+// --- QA Groups (배포예정 기능별 QA 테스트 묶음) ---
+export async function getQaGroups(productId: string): Promise<QaGroup[]> {
+  const snap = await getDocs(query(collection(db, 'qaGroups'), where('productId', '==', productId)))
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as QaGroup))
+  return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
+}
+export async function createQaGroup(data: Omit<QaGroup, 'id' | 'createdAt' | 'order'>, order: number): Promise<string> {
+  const ref = await addDoc(collection(db, 'qaGroups'), { ...data, order, createdAt: new Date().toISOString() })
+  return ref.id
+}
+export async function updateQaGroup(id: string, data: Partial<QaGroup>): Promise<void> {
+  await updateDoc(doc(db, 'qaGroups', id), data)
+}
+export async function deleteQaGroup(id: string): Promise<void> {
+  // 묶음 삭제 시 하위 체크 항목도 함께 삭제
+  const snap = await getDocs(query(collection(db, 'qaChecks'), where('groupId', '==', id)))
+  const batch = writeBatch(db)
+  snap.docs.forEach((d) => batch.delete(d.ref))
+  batch.delete(doc(db, 'qaGroups', id))
+  await batch.commit()
+}
+
+// --- QA Checks (QA 체크 항목) ---
+export async function getQaChecks(groupId: string): Promise<QaCheck[]> {
+  const snap = await getDocs(query(collection(db, 'qaChecks'), where('groupId', '==', groupId)))
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as QaCheck))
+  return docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt.localeCompare(b.createdAt))
+}
+export async function createQaCheck(data: Omit<QaCheck, 'id' | 'createdAt'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'qaChecks'), { ...data, createdAt: new Date().toISOString() })
+  return ref.id
+}
+export async function updateQaCheck(id: string, data: Partial<QaCheck>): Promise<void> {
+  await updateDoc(doc(db, 'qaChecks', id), data)
+}
+export async function deleteQaCheck(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'qaChecks', id))
 }
 
 // --- Test Cases ---

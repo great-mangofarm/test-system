@@ -50,5 +50,15 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update, delete: if isAdminOrDev();
     }
+
+    match /qaGroups/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdminOrDev();
+    }
+
+    match /qaChecks/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdminOrDev();
+    }
   }
 }

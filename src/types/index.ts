@@ -31,6 +31,30 @@ export interface Product {
 
 export type DeployBatchStatus = 'planned' | 'deployed'
 
+// QA 테스트 (배포예정 기능별 가벼운 체크) — 테스트케이스/운영이슈와 별개
+export type QaStatus = 'pass' | 'block' | 'pending'
+
+export interface QaGroup {
+  id: string
+  productId: string
+  name: string
+  deployDate?: string
+  order: number
+  createdAt: string
+}
+
+export interface QaCheck {
+  id: string
+  groupId: string
+  productId: string
+  title: string
+  asIs: string
+  toBe: string
+  status: QaStatus
+  order: number
+  createdAt: string
+}
+
 export interface DeployBatch {
   id: string
   suiteId: string
