@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck, QaTicketGroup } from '@/types'
+import type { Product, TestSuite, TestCase, UserProfile, DeployBatch, QaGroup, QaCheck, QaTicketGroup, DevRequest } from '@/types'
 
 // --- Users ---
 export async function getUsers(): Promise<UserProfile[]> {
@@ -99,6 +99,26 @@ export async function updateDeployBatch(id: string, data: Partial<DeployBatch>):
 
 export async function deleteDeployBatch(id: string): Promise<void> {
   await deleteDoc(doc(db, 'deployBatches', id))
+}
+
+// --- Dev Requests (스태프 개발요청 → 다우 기안) ---
+export async function getDevRequests(): Promise<DevRequest[]> {
+  const snap = await getDocs(collection(db, 'devRequests'))
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as DevRequest))
+  return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export async function createDevRequest(data: Omit<DevRequest, 'id' | 'createdAt'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'devRequests'), { ...data, createdAt: new Date().toISOString() })
+  return ref.id
+}
+
+export async function updateDevRequest(id: string, data: Partial<DevRequest>): Promise<void> {
+  await updateDoc(doc(db, 'devRequests', id), data)
+}
+
+export async function deleteDevRequest(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'devRequests', id))
 }
 
 // --- QA Ticket Groups (QA 묶음 안의 그룹: 티켓 여러 개) ---

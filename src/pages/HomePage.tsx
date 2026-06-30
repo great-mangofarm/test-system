@@ -36,7 +36,7 @@ import { useAuth, logout, deleteAccount } from '@/store/auth'
 import type { Product, TestSuite, SuiteType, UserRole, QaGroup } from '@/types'
 import {
   Plus, Package, ClipboardList, ArrowRight, Pencil, Trash2,
-  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X, Lock, Eye, EyeOff,
+  LogOut, Users, KeyRound, ChevronDown, GripVertical, Wrench, X, Lock, Eye, EyeOff, Inbox,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -650,6 +650,11 @@ export default function HomePage() {
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
         <h1 className="text-xl font-bold text-slate-800">에버온 이슈트래커</h1>
         <div className="flex items-center gap-2">
+          {user?.role === 'admin' && (
+            <Button variant="ghost" size="sm" onClick={() => navigate('/requests')}>
+              <Inbox className="w-4 h-4" /> 개발요청
+            </Button>
+          )}
           {user?.role === 'admin' && (
             <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
               <Users className="w-4 h-4" /> 사용자 관리

@@ -32,6 +32,21 @@ export interface Product {
 
 export type DeployBatchStatus = 'planned' | 'deployed'
 
+// 스태프 개발요청 — 여러 건을 모아 다우오피스 기안으로 전송
+export interface DevRequest {
+  id: string
+  title: string
+  background: string       // 요청 배경
+  content: string          // 요청 내용
+  desiredDueDate?: string  // 희망 완료일
+  policyDocUrl?: string    // 정책문서 링크
+  createdBy: string        // uid
+  createdByName: string
+  team?: string
+  done: boolean            // 개발완료여부 (수동 토글)
+  createdAt: string
+}
+
 // QA 테스트 (배포예정 기능별 가벼운 체크) — 테스트케이스/운영이슈와 별개
 export type QaStatus = 'pass' | 'block' | 'pending'
 

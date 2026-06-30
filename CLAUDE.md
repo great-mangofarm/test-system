@@ -33,7 +33,9 @@
 
 ## 현재 버전
 
-**v1.1.0** (배포 완료) — 다음 배포는 규모에 따라 v1.1.1(패치) 또는 v1.2.0(마이너)
+**v1.5.0** (배포 완료) — 다음 배포는 규모에 따라 v1.5.1(패치) 또는 v1.6.0(마이너)
+
+> v1.5.0: 스태프 **개발요청** 기능 추가 — 별도 최상위 영역(`/requests`). 스태프 로그인 시 자동 이동, admin은 메인 헤더에서 진입. 요청 작성→여러 건 선택→다우오피스 전자결재 기안으로 전송(`/api/daou-draft`가 다우 호출 후 그룹웨어 팝업 URL 반환→새 창). 개발완료는 admin·pm 수동 토글. 컬렉션 `devRequests`(규칙 추가됨—콘솔 게시 필요). env: `DAOU_CLIENT_ID/SECRET`(+선택 `DAOU_FORM_CODE` 기본 IT-SW-REQ).
 
 > 배포/환경 관련 주의: 시크릿(`FIREBASE_SERVICE_ACCOUNT`, `JIRA_*`)은 Vercel **Production·Preview 스코프에만** 있음(Development 없음) → `vercel dev`로는 `/api/*` 함수가 안 돔. **API 변경 테스트는 브랜치 push → Vercel 프리뷰**로. 프로덕션 도메인: `issue.datasystem.app`.
 

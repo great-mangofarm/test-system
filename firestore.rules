@@ -68,5 +68,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update, delete: if isEditor();
     }
+
+    // 스태프 개발요청: 로그인 사용자면 작성 가능, 수정/삭제는 작성자 본인 또는 관리자(admin·pm)
+    match /devRequests/{id} {
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.createdBy == request.auth.uid || isManager());
+    }
   }
 }
