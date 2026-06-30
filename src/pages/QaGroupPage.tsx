@@ -75,7 +75,7 @@ export default function QaGroupPage() {
     const first = projectKeys[0] ?? ''
     setPickerProject(first)
     if (first) fetchTickets(first)
-    else setTicketError('이 프로덕트에 Jira 프로젝트 키가 없습니다. 프로덕트 정보에서 추가하세요.')
+    else setTicketError('이 프로덕트/프로젝트에 Jira 키가 없습니다. 프로덕트/프로젝트 정보에서 추가하세요.')
   }
   async function fetchTickets(projectKey: string) {
     if (!projectKey) return

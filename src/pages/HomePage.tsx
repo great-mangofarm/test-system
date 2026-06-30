@@ -563,10 +563,10 @@ export default function HomePage() {
       const payload = { ...productForm, jiraProjectKey: productForm.jiraProjectKeys[0] ?? '', jiraProjectKeys: productForm.jiraProjectKeys }
       if (productDialog?.mode === 'edit' && productDialog.target) {
         await updateProduct(productDialog.target.id, payload)
-        toast({ title: '프로덕트 수정 완료' })
+        toast({ title: '프로덕트/프로젝트 수정 완료' })
       } else {
         await createProduct(payload, products.length)
-        toast({ title: '프로덕트 추가 완료' })
+        toast({ title: '프로덕트/프로젝트 추가 완료' })
       }
       setProductDialog(null)
       await loadProducts()
@@ -575,7 +575,7 @@ export default function HomePage() {
   async function handleProductDelete() {
     if (!deleteProduct_) return
     await deleteProduct(deleteProduct_.id)
-    toast({ title: '프로덕트 삭제됨', variant: 'destructive' })
+    toast({ title: '프로덕트/프로젝트 삭제됨', variant: 'destructive' })
     if (selectedProduct?.id === deleteProduct_.id) setSelectedProduct(null)
     setDeleteProduct_(null)
     await loadProducts()
@@ -679,7 +679,7 @@ export default function HomePage() {
         {/* Left: Products */}
         <aside className="w-60 bg-white border-r flex flex-col shrink-0">
           <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">프로덕트</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">프로덕트/프로젝트</span>
             {canManageProduct && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openProductCreate}>
                 <Plus className="w-3.5 h-3.5" />
@@ -695,8 +695,8 @@ export default function HomePage() {
               <div className="text-center py-10 text-slate-400 text-sm px-4">
                 <Package className="w-7 h-7 mx-auto mb-2 opacity-30" />
                 {canManageProduct
-                  ? <button className="text-primary hover:underline text-xs" onClick={openProductCreate}>+ 프로덕트 추가</button>
-                  : '프로덕트가 없습니다'}
+                  ? <button className="text-primary hover:underline text-xs" onClick={openProductCreate}>+ 추가</button>
+                  : '프로덕트/프로젝트가 없습니다'}
               </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProductDragEnd}>
@@ -770,7 +770,7 @@ export default function HomePage() {
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-6 py-3 border-b bg-white shrink-0">
             <span className="text-sm font-semibold text-slate-600">
-              {selectedProduct ? selectedProduct.name : '프로덕트를 선택하세요'}
+              {selectedProduct ? selectedProduct.name : '프로덕트/프로젝트를 선택하세요'}
             </span>
             <div className="flex items-center gap-3">
               {selectedProduct && hiddenCount > 0 && (
@@ -791,7 +791,7 @@ export default function HomePage() {
             {!selectedProduct ? (
               <div className="text-center py-20 text-slate-400">
                 <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">좌측에서 프로덕트를 선택하세요</p>
+                <p className="text-sm">좌측에서 프로덕트/프로젝트를 선택하세요</p>
               </div>
             ) : loadingSuites ? (
               <div className="space-y-2">
@@ -841,11 +841,11 @@ export default function HomePage() {
       <Dialog open={!!productDialog} onOpenChange={(o) => !o && setProductDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{productDialog?.mode === 'edit' ? '프로덕트 수정' : '새 프로덕트'}</DialogTitle>
+            <DialogTitle>{productDialog?.mode === 'edit' ? '프로덕트/프로젝트 수정' : '새 프로덕트/프로젝트'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>프로덕트명 *</Label>
+              <Label>이름 *</Label>
               <Input placeholder="예: 에버온 앱 v2.0" value={productForm.name}
                 onChange={(e) => setProductForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
             </div>
@@ -959,7 +959,7 @@ export default function HomePage() {
       <AlertDialog open={!!deleteProduct_} onOpenChange={(o) => !o && setDeleteProduct_(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>프로덕트 삭제</AlertDialogTitle>
+            <AlertDialogTitle>프로덕트/프로젝트 삭제</AlertDialogTitle>
             <AlertDialogDescription>"{deleteProduct_?.name}"을 삭제하시겠습니까?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
