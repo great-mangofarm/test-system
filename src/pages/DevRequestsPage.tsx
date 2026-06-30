@@ -154,6 +154,8 @@ export default function DevRequestsPage() {
   async function handleSend() {
     const chosen = requests.filter((r) => selected.has(r.id))
     if (chosen.length === 0) return
+    // 팝업 차단 방지: 클릭 제스처 내에서 빈 창을 먼저 연 뒤 URL을 채운다
+    const win = window.open('', '_blank')
     setSending(true)
     try {
       const title =
@@ -170,11 +172,13 @@ export default function DevRequestsPage() {
       if (!res.ok || !data.url) {
         throw new Error(data.error || '기안 생성 실패')
       }
-      // 그룹웨어 기안 작성 팝업 열기 (로그인된 사용자가 기안자)
-      window.open(data.url, '_blank', 'noopener,noreferrer')
+      // 그룹웨어 기안 작성 팝업 (로그인된 사용자가 기안자)
+      if (win) win.location.href = data.url
+      else window.open(data.url, '_blank', 'noopener,noreferrer')
       toast({ title: '기안 작성 창을 열었습니다', description: '그룹웨어에서 결재선 확인 후 상신하세요' })
       setSelected(new Set())
     } catch (e) {
+      if (win) win.close()
       toast({ title: '기안 전송 실패', description: String((e as Error).message), variant: 'destructive' })
     } finally {
       setSending(false)
