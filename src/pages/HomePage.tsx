@@ -26,7 +26,7 @@ import { ChangePasswordModal } from '@/components/ChangePasswordModal'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import {
-  getProducts, createProduct, updateProduct, deleteProduct, reorderProducts,
+  getProducts, createProduct, updateProduct, deleteProduct,
   getSuites, createSuite, updateSuite, deleteSuite, reorderSuites, getSuiteStats,
   getQaGroups, createQaGroup, updateQaGroup, deleteQaGroup,
   type SuiteStats,
@@ -44,6 +44,18 @@ import { cn } from '@/lib/utils'
 // 일부 역할에게 가려진(=전체 공개가 아닌) 항목인지 판단 — admin 목록의 🔒 표시용
 function isRoleRestricted(visibleRoles?: UserRole[]): boolean {
   return !!visibleRoles && VIEW_CONTROL_ROLES.some((r) => !visibleRoles.includes(r))
+}
+
+// 사용자별 저장된 순서(id 배열)대로 정렬. 순서에 없는 건 기존(Firestore order) 순서로 뒤에.
+function applyProductOrder(list: Product[], order: string[]): Product[] {
+  if (order.length === 0) return list
+  return [...list].sort((a, b) => {
+    const ia = order.indexOf(a.id), ib = order.indexOf(b.id)
+    if (ia === -1 && ib === -1) return 0
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
 }
 
 // 노출 권한 체크박스 그룹 (다이얼로그 공용)
@@ -141,18 +153,19 @@ type SuiteDialog = { mode: 'create' | 'edit'; target?: TestSuite }
 
 // Sortable product item
 function SortableProduct({
-  product, selected, canManage, restricted, onSelect, onEdit, onDelete,
+  product, selected, canManage, canReorder, restricted, onSelect, onEdit, onDelete,
 }: {
   product: Product
   selected: boolean
   canManage: boolean
+  canReorder: boolean
   restricted: boolean
   onSelect: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: product.id, disabled: !canManage })
+    useSortable({ id: product.id, disabled: !canReorder })
 
   return (
     <div
@@ -165,7 +178,7 @@ function SortableProduct({
       )}
       onClick={onSelect}
     >
-      {canManage && (
+      {canReorder && (
         <span
           {...attributes}
           {...listeners}
@@ -397,16 +410,22 @@ export default function HomePage() {
   // 사용자별(기기별) 묶음 숨김 설정 — localStorage 저장
   const [hiddenSuiteIds, setHiddenSuiteIds] = useState<Set<string>>(new Set())
   const [showHidden, setShowHidden] = useState(false)
+  // 프로덕트 순서 — 사용자별(기기별) localStorage. 전역 아님.
+  const [productOrder, setProductOrder] = useState<string[]>([])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // 묶음 숨김 설정 로드 (사용자 uid별 키)
+  // 묶음 숨김 + 프로덕트 순서 로드 (사용자 uid별 키)
   useEffect(() => {
-    if (!user?.uid) { setHiddenSuiteIds(new Set()); return }
+    if (!user?.uid) { setHiddenSuiteIds(new Set()); setProductOrder([]); return }
     try {
       const raw = localStorage.getItem(`hiddenSuites:${user.uid}`)
       setHiddenSuiteIds(new Set(raw ? (JSON.parse(raw) as string[]) : []))
     } catch { setHiddenSuiteIds(new Set()) }
+    try {
+      const raw = localStorage.getItem(`productOrder:${user.uid}`)
+      setProductOrder(raw ? (JSON.parse(raw) as string[]) : [])
+    } catch { setProductOrder([]) }
   }, [user?.uid])
 
   function toggleSuiteHidden(id: string) {
@@ -479,15 +498,18 @@ export default function HomePage() {
     } finally { setLoadingSuites(false) }
   }
 
-  // DnD
-  async function handleProductDragEnd(event: DragEndEvent) {
+  // DnD — 프로덕트 순서는 사용자별(localStorage)
+  function handleProductDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = products.findIndex((p) => p.id === active.id)
-    const newIndex = products.findIndex((p) => p.id === over.id)
-    const reordered = arrayMove(products, oldIndex, newIndex)
-    setProducts(reordered)
-    await reorderProducts(reordered.map((p) => p.id))
+    if (!over || active.id === over.id || !user?.uid) return
+    const visible = products.filter((p) => canViewByRole(p.visibleRoles, user?.role))
+    const ordered = applyProductOrder(visible, productOrder)
+    const oldIndex = ordered.findIndex((p) => p.id === active.id)
+    const newIndex = ordered.findIndex((p) => p.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    const ids = arrayMove(ordered, oldIndex, newIndex).map((p) => p.id)
+    setProductOrder(ids)
+    localStorage.setItem(`productOrder:${user.uid}`, JSON.stringify(ids))
   }
 
   async function handleSuiteDragEnd(event: DragEndEvent) {
@@ -602,7 +624,7 @@ export default function HomePage() {
   }
 
   // 역할 기준 노출 필터 (admin/developer는 전체 노출)
-  const visibleProducts = products.filter((p) => canViewByRole(p.visibleRoles, user?.role))
+  const visibleProducts = applyProductOrder(products.filter((p) => canViewByRole(p.visibleRoles, user?.role)), productOrder)
   const visibleSuites = suites.filter((s) => canViewByRole(s.visibleRoles, user?.role))
 
   // 사용자별 숨김 필터 (역할 필터 통과분 중에서)
@@ -672,6 +694,7 @@ export default function HomePage() {
                       product={p}
                       selected={selectedProduct?.id === p.id}
                       canManage={canManageProduct}
+                      canReorder={!!user}
                       restricted={isAdmin && isRoleRestricted(p.visibleRoles)}
                       onSelect={() => setSelectedProduct(p)}
                       onEdit={() => openProductEdit(p)}
