@@ -20,7 +20,8 @@ export interface Product {
   id: string
   name: string
   description: string
-  jiraProjectKey: string
+  jiraProjectKey: string       // 대표 키 (이슈 Jira 티켓 생성용)
+  jiraProjectKeys?: string[]   // QA 티켓 조회용 전체 키 목록 (대표 포함)
   areas: string[]
   order: number
   createdAt: string

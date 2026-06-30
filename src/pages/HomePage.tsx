@@ -384,9 +384,10 @@ export default function HomePage() {
   const [loadingSuites, setLoadingSuites] = useState(false)
 
   const [productDialog, setProductDialog] = useState<ProductDialog | null>(null)
-  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKey: '', areas: [] as string[], visibleRoles: [...VIEW_CONTROL_ROLES] as UserRole[] })
+  const [productForm, setProductForm] = useState({ name: '', description: '', jiraProjectKeys: [] as string[], areas: [] as string[], visibleRoles: [...VIEW_CONTROL_ROLES] as UserRole[] })
   const [areaInput, setAreaInput] = useState('')
   const areaComposing = useRef(false)
+  const [keyInput, setKeyInput] = useState('')
   const [productSaving, setProductSaving] = useState(false)
   const [deleteProduct_, setDeleteProduct_] = useState<Product | null>(null)
 
@@ -524,13 +525,14 @@ export default function HomePage() {
 
   // Product CRUD
   function openProductCreate() {
-    setProductForm({ name: '', description: '', jiraProjectKey: '', areas: [], visibleRoles: [...VIEW_CONTROL_ROLES] })
-    setAreaInput('')
+    setProductForm({ name: '', description: '', jiraProjectKeys: [], areas: [], visibleRoles: [...VIEW_CONTROL_ROLES] })
+    setAreaInput(''); setKeyInput('')
     setProductDialog({ mode: 'create' })
   }
   function openProductEdit(p: Product) {
-    setProductForm({ name: p.name, description: p.description, jiraProjectKey: p.jiraProjectKey ?? '', areas: p.areas ?? [], visibleRoles: p.visibleRoles ?? [...VIEW_CONTROL_ROLES] })
-    setAreaInput('')
+    const keys = p.jiraProjectKeys?.length ? p.jiraProjectKeys : (p.jiraProjectKey ? [p.jiraProjectKey] : [])
+    setProductForm({ name: p.name, description: p.description, jiraProjectKeys: keys, areas: p.areas ?? [], visibleRoles: p.visibleRoles ?? [...VIEW_CONTROL_ROLES] })
+    setAreaInput(''); setKeyInput('')
     setProductDialog({ mode: 'edit', target: p })
   }
 
@@ -540,19 +542,30 @@ export default function HomePage() {
     setProductForm((f) => ({ ...f, areas: [...f.areas, trimmed] }))
     setAreaInput('')
   }
-
   function removeArea(area: string) {
     setProductForm((f) => ({ ...f, areas: f.areas.filter((a) => a !== area) }))
+  }
+
+  function addKey() {
+    const trimmed = keyInput.trim().toUpperCase()
+    if (!trimmed || productForm.jiraProjectKeys.includes(trimmed)) return
+    setProductForm((f) => ({ ...f, jiraProjectKeys: [...f.jiraProjectKeys, trimmed] }))
+    setKeyInput('')
+  }
+  function removeKey(k: string) {
+    setProductForm((f) => ({ ...f, jiraProjectKeys: f.jiraProjectKeys.filter((x) => x !== k) }))
   }
   async function handleProductSave() {
     if (!productForm.name.trim()) return
     setProductSaving(true)
     try {
+      // jiraProjectKey(대표) = 목록 첫 번째 — 이슈 Jira 티켓 생성에 사용(기존 동작 유지)
+      const payload = { ...productForm, jiraProjectKey: productForm.jiraProjectKeys[0] ?? '', jiraProjectKeys: productForm.jiraProjectKeys }
       if (productDialog?.mode === 'edit' && productDialog.target) {
-        await updateProduct(productDialog.target.id, productForm)
+        await updateProduct(productDialog.target.id, payload)
         toast({ title: '프로덕트 수정 완료' })
       } else {
-        await createProduct(productForm, products.length)
+        await createProduct(payload, products.length)
         toast({ title: '프로덕트 추가 완료' })
       }
       setProductDialog(null)
@@ -570,7 +583,7 @@ export default function HomePage() {
 
   // Suite CRUD
   function openSuiteCreate() {
-    setSuiteForm({ name: '', version: '', type: 'qa', visibleRoles: [...VIEW_CONTROL_ROLES] })
+    setSuiteForm({ name: '', version: '', type: 'dev', visibleRoles: [...VIEW_CONTROL_ROLES] })
     setSuiteDialog({ mode: 'create' })
   }
   function openSuiteEdit(s: TestSuite) {
@@ -842,9 +855,28 @@ export default function HomePage() {
                 onChange={(e) => setProductForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label>Jira 프로젝트 키 <span className="text-xs text-slate-400 font-normal">— 티켓 자동 생성 연동</span></Label>
-              <Input placeholder="예: EPC, ADMIN" value={productForm.jiraProjectKey}
-                onChange={(e) => setProductForm((f) => ({ ...f, jiraProjectKey: e.target.value.toUpperCase() }))} />
+              <Label>Jira 프로젝트 키 <span className="text-xs text-slate-400 font-normal">— 첫 번째가 대표(이슈 티켓 생성용), 나머지는 QA 조회용</span></Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="예: APP (입력 후 Enter)"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addKey() } }}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={addKey} disabled={!keyInput.trim()}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              {productForm.jiraProjectKeys.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {productForm.jiraProjectKeys.map((k, i) => (
+                    <span key={k} className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-xs rounded-full font-mono">
+                      {k}{i === 0 && <span className="text-[10px] text-primary font-sans">대표</span>}
+                      <button type="button" onClick={() => removeKey(k)} className="text-slate-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 영역 관리 */}
@@ -898,26 +930,6 @@ export default function HomePage() {
             <DialogTitle>{suiteDialog?.mode === 'edit' ? '묶음 수정' : '새 묶음'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>종류</Label>
-              <div className="flex gap-2">
-                {(['qa', 'dev'] as SuiteType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setSuiteForm((f) => ({ ...f, type: t }))}
-                    className={cn(
-                      'flex-1 py-2 rounded-md border text-sm font-medium transition-colors',
-                      suiteForm.type === t
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                    )}
-                  >
-                    {SUITE_TYPE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="space-y-2">
               <Label>이름 *</Label>
               <Input placeholder="예: v2.1 릴리즈" value={suiteForm.name}

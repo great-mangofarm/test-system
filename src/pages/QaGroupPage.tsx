@@ -34,10 +34,14 @@ export default function QaGroupPage() {
   const [loading, setLoading] = useState(true)
 
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerProject, setPickerProject] = useState('')
   const [ticketLoading, setTicketLoading] = useState(false)
   const [ticketOptions, setTicketOptions] = useState<Array<{ key: string; summary: string; status: string; url: string }>>([])
-  const [ticketSelected, setTicketSelected] = useState<Set<string>>(new Set())
+  // 선택한 티켓을 데이터째 보관 → 프로젝트 전환해도 유지(혼합 선택)
+  const [selectedTickets, setSelectedTickets] = useState<Map<string, { jiraKey: string; title: string; url: string }>>(new Map())
   const [ticketError, setTicketError] = useState('')
+
+  const projectKeys = product?.jiraProjectKeys?.length ? product.jiraProjectKeys : (product?.jiraProjectKey ? [product.jiraProjectKey] : [])
 
   const [deleteTG, setDeleteTG] = useState<QaTicketGroup | null>(null)
   const [deleteCheckTarget, setDeleteCheckTarget] = useState<QaCheck | null>(null)
@@ -63,15 +67,23 @@ export default function QaGroupPage() {
   }
 
   // --- 그룹(티켓) 추가 ---
-  async function openPicker() {
+  function openPicker() {
     setPickerOpen(true)
-    setTicketSelected(new Set())
+    setSelectedTickets(new Map())
     setTicketError('')
-    if (!product?.jiraProjectKey) { setTicketError('이 프로덕트에 Jira 프로젝트 키가 없습니다.'); setTicketOptions([]); return }
+    setTicketOptions([])
+    const first = projectKeys[0] ?? ''
+    setPickerProject(first)
+    if (first) fetchTickets(first)
+    else setTicketError('이 프로덕트에 Jira 프로젝트 키가 없습니다. 프로덕트 정보에서 추가하세요.')
+  }
+  async function fetchTickets(projectKey: string) {
+    if (!projectKey) return
     setTicketLoading(true)
+    setTicketError('')
     try {
-      const statuses = ticketStatusesFor(product.jiraProjectKey)
-      const res = await authedFetch(`/api/jira-issues?projectKey=${encodeURIComponent(product.jiraProjectKey)}&statuses=${encodeURIComponent(statuses.join(','))}`)
+      const statuses = ticketStatusesFor(projectKey)
+      const res = await authedFetch(`/api/jira-issues?projectKey=${encodeURIComponent(projectKey)}&statuses=${encodeURIComponent(statuses.join(','))}`)
       const data = await res.json()
       if (!res.ok) { setTicketError('티켓을 불러오지 못했습니다: ' + JSON.stringify(data.error ?? data)); setTicketOptions([]) }
       else setTicketOptions(data.issues ?? [])
@@ -83,15 +95,11 @@ export default function QaGroupPage() {
   }
   async function createGroup() {
     if (!productId || !groupId) return
-    const chosen = ticketOptions.filter((t) => ticketSelected.has(t.key))
-    await createQaTicketGroup({
-      qaGroupId: groupId, productId,
-      tickets: chosen.map((t) => ({ jiraKey: t.key, title: t.summary, url: t.url })),
-      order: ticketGroups.length,
-    })
+    const tickets = [...selectedTickets.values()]
+    await createQaTicketGroup({ qaGroupId: groupId, productId, tickets, order: ticketGroups.length })
     setTicketGroups(await getQaTicketGroups(groupId))
     setPickerOpen(false)
-    toast({ title: `그룹 생성됨 (티켓 ${chosen.length}개)` })
+    toast({ title: `그룹 생성됨 (티켓 ${tickets.length}개)` })
   }
   async function handleDeleteTG() {
     if (!deleteTG) return
@@ -292,9 +300,18 @@ export default function QaGroupPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>그룹 추가 — 티켓 선택</DialogTitle></DialogHeader>
           <div className="py-1">
-            <p className="text-xs text-slate-400 mb-2">
-              {product?.jiraProjectKey ? <>프로젝트 <strong>{product.jiraProjectKey}</strong> · 상태: {ticketStatusesFor(product.jiraProjectKey).join(', ')}</> : 'Jira 프로젝트 키 없음'}
-            </p>
+            <div className="flex items-center gap-2 mb-2">
+              {projectKeys.length > 0 ? (
+                <Select value={pickerProject} onValueChange={(v) => { setPickerProject(v); fetchTickets(v) }}>
+                  <SelectTrigger className="h-8 text-sm w-44"><SelectValue placeholder="프로젝트" /></SelectTrigger>
+                  <SelectContent>
+                    {projectKeys.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : <span className="text-sm text-slate-400">Jira 프로젝트 키 없음</span>}
+              {pickerProject && <span className="text-xs text-slate-400">상태: {ticketStatusesFor(pickerProject).join(', ')}</span>}
+              {selectedTickets.size > 0 && <span className="ml-auto text-xs text-primary font-medium">선택 {selectedTickets.size}개</span>}
+            </div>
             {ticketError && <p className="text-sm text-destructive mb-2">{ticketError}</p>}
             <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
               {ticketLoading ? (
@@ -304,7 +321,11 @@ export default function QaGroupPage() {
               ) : (
                 ticketOptions.map((t) => (
                   <label key={t.key} className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50">
-                    <Checkbox checked={ticketSelected.has(t.key)} onChange={(c) => setTicketSelected((prev) => { const n = new Set(prev); if (c) n.add(t.key); else n.delete(t.key); return n })} className="mt-0.5" />
+                    <Checkbox checked={selectedTickets.has(t.key)} onChange={(c) => setSelectedTickets((prev) => {
+                      const n = new Map(prev)
+                      if (c) n.set(t.key, { jiraKey: t.key, title: t.summary, url: t.url }); else n.delete(t.key)
+                      return n
+                    })} className="mt-0.5" />
                     <div className="min-w-0">
                       <span className="text-xs font-mono text-slate-500">{t.key}</span>
                       <span className="text-xs text-slate-400 ml-1.5">{t.status}</span>
@@ -314,10 +335,13 @@ export default function QaGroupPage() {
                 ))
               )}
             </div>
+            {selectedTickets.size > 0 && (
+              <p className="text-xs text-slate-400 mt-2">프로젝트를 바꿔가며 선택하면 한 그룹에 여러 프로젝트 티켓을 함께 담을 수 있어요.</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPickerOpen(false)}>취소</Button>
-            <Button onClick={createGroup}>{ticketSelected.size > 0 ? `티켓 ${ticketSelected.size}개로 그룹 생성` : '티켓 없이 그룹 생성'}</Button>
+            <Button onClick={createGroup}>{selectedTickets.size > 0 ? `티켓 ${selectedTickets.size}개로 그룹 생성` : '티켓 없이 그룹 생성'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
