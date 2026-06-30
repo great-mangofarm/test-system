@@ -17,7 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ChevronLeft, Plus, Trash2, RefreshCw, Loader2, ExternalLink } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, RefreshCw, Loader2, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
@@ -41,6 +41,8 @@ export default function QaGroupPage() {
 
   const [deleteTG, setDeleteTG] = useState<QaTicketGroup | null>(null)
   const [deleteCheckTarget, setDeleteCheckTarget] = useState<QaCheck | null>(null)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const toggleCollapse = (id: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   useEffect(() => { load() }, [productId, groupId])
 
@@ -82,7 +84,6 @@ export default function QaGroupPage() {
   async function createGroup() {
     if (!productId || !groupId) return
     const chosen = ticketOptions.filter((t) => ticketSelected.has(t.key))
-    if (chosen.length === 0) return
     await createQaTicketGroup({
       qaGroupId: groupId, productId,
       tickets: chosen.map((t) => ({ jiraKey: t.key, title: t.summary, url: t.url })),
@@ -178,25 +179,52 @@ export default function QaGroupPage() {
         ) : (
           ticketGroups.map((tg) => {
             const groupChecks = checks.filter((c) => c.ticketGroupId === tg.id).sort((a, b) => a.order - b.order)
+            const gTotal = groupChecks.length
+            const gPass = groupChecks.filter((c) => c.status === 'pass').length
+            const gBlock = groupChecks.filter((c) => c.status === 'block').length
+            const gPending = groupChecks.filter((c) => c.status === 'pending').length
+            const gDone = gTotal > 0 ? Math.round(((gPass + gBlock) / gTotal) * 100) : 0
+            const isCollapsed = collapsed.has(tg.id)
             return (
               <div key={tg.id} className="rounded-lg border border-slate-200 shadow-sm overflow-hidden bg-white">
-                {/* 그룹 헤더: 티켓 칩들 */}
-                <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
-                  <div className="flex flex-wrap gap-1.5 min-w-0">
-                    {tg.tickets.map((t) => (
-                      <a key={t.jiraKey} href={t.url} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-slate-200 bg-white hover:border-primary/50 max-w-xs">
-                        <span className="font-mono font-semibold text-primary shrink-0">{t.jiraKey}</span>
-                        <span className="text-slate-600 truncate">{t.title}</span>
-                        <ExternalLink className="w-3 h-3 text-slate-300 shrink-0" />
-                      </a>
-                    ))}
+                {/* 그룹 헤더: 접기 + 티켓 + 통계 */}
+                <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+                  <div className="flex items-start gap-2">
+                    <button className="text-slate-400 hover:text-slate-700 mt-0.5 shrink-0" onClick={() => toggleCollapse(tg.id)}>
+                      {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                    <div className="flex flex-col gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => toggleCollapse(tg.id)}>
+                      {tg.tickets.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {tg.tickets.map((t) => (
+                            <a key={t.jiraKey} href={t.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-slate-200 bg-white hover:border-primary/50">
+                              <span className="font-mono font-semibold text-primary shrink-0">{t.jiraKey}</span>
+                              <span className="text-slate-700">{t.title}</span>
+                              <ExternalLink className="w-3 h-3 text-slate-300 shrink-0" />
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-slate-400">티켓 미연결 그룹</span>
+                      )}
+                      {/* 그룹별 통계 */}
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-green-700">통과 <strong>{gPass}</strong></span>
+                        <span className="text-red-700">블록 <strong>{gBlock}</strong></span>
+                        <span className="text-slate-500">미확인 <strong>{gPending}</strong></span>
+                        <span className="text-slate-400">·</span>
+                        <span className="text-slate-600">완료 <strong>{gDone}%</strong></span>
+                        <span className="text-slate-300">({gTotal}건)</span>
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <button className="text-slate-300 hover:text-destructive shrink-0 mt-0.5" onClick={() => setDeleteTG(tg)} title="그룹 삭제"><Trash2 className="w-4 h-4" /></button>
+                    )}
                   </div>
-                  {canEdit && (
-                    <button className="text-slate-300 hover:text-destructive shrink-0 mt-0.5" onClick={() => setDeleteTG(tg)} title="그룹 삭제"><Trash2 className="w-4 h-4" /></button>
-                  )}
                 </div>
-                {/* 케이스 표 */}
+                {/* 케이스 표 (접힘 시 숨김) */}
+                {!isCollapsed && (
                 <table className="w-full text-sm border-collapse">
                   <thead className="bg-white border-b border-slate-100">
                     <tr className="text-xs text-slate-500">
@@ -247,7 +275,8 @@ export default function QaGroupPage() {
                     )}
                   </tbody>
                 </table>
-                {canEdit && (
+                )}
+                {!isCollapsed && canEdit && (
                   <div className="border-t border-slate-100 p-2">
                     <Button variant="ghost" size="sm" className="w-full text-slate-500 text-xs" onClick={() => addCheck(tg.id)}><Plus className="w-3.5 h-3.5 mr-1" /> 케이스 추가</Button>
                   </div>
@@ -288,7 +317,7 @@ export default function QaGroupPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPickerOpen(false)}>취소</Button>
-            <Button disabled={ticketSelected.size === 0} onClick={createGroup}>티켓 {ticketSelected.size}개로 그룹 생성</Button>
+            <Button onClick={createGroup}>{ticketSelected.size > 0 ? `티켓 ${ticketSelected.size}개로 그룹 생성` : '티켓 없이 그룹 생성'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
