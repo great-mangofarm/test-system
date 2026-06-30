@@ -8,6 +8,8 @@ const DAOU_BASE = process.env.DAOU_BASE_URL || 'https://api.daouoffice.com'
 const CLIENT_ID = process.env.DAOU_CLIENT_ID || ''
 const CLIENT_SECRET = process.env.DAOU_CLIENT_SECRET || ''
 const FORM_CODE = process.env.DAOU_FORM_CODE || 'IT-SW-REQ'
+// 기안 처리상태 콜백 URL (필수 파라미터, 80/443 포트만 허용)
+const CALLBACK_URL = process.env.DAOU_CALLBACK_URL || 'https://issue.datasystem.app/api/daou-callback'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
@@ -25,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   form.append('formCode', FORM_CODE)
   form.append('title', title)
   form.append('content', content)
+  form.append('callbackUrl', CALLBACK_URL)
 
   try {
     const r = await fetch(`${DAOU_BASE}/public/v4/approval/document/popup`, {
