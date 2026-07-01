@@ -8,7 +8,7 @@ import { buildSwReqContent } from './lib/daou-form.js'
 const DAOU_BASE = process.env.DAOU_BASE_URL || 'https://api.daouoffice.com'
 const CLIENT_ID = process.env.DAOU_CLIENT_ID || ''
 const CLIENT_SECRET = process.env.DAOU_CLIENT_SECRET || ''
-const FORM_CODE = process.env.DAOU_FORM_CODE || 'IT-SW-REQ'
+const FORM_CODE = process.env.DAOU_FORM_CODE || 'IT-SW-REQ2'
 // 기안 처리상태 콜백 URL (필수 파라미터, 80/443 포트만 허용)
 const CALLBACK_URL = process.env.DAOU_CALLBACK_URL || 'https://issue.datasystem.app/api/daou-callback'
 
