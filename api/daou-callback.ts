@@ -35,5 +35,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch {
     // 저장 실패해도 응답은 진행
   }
-  return res.status(200).json({ ok: true })
+  // 다우 표준 응답 형식(code/message)으로 ack — {"ok":true}는 973(유효하지 않은 데이터 포맷)
+  return res.status(200).json({ code: '200', message: 'OK' })
 }
