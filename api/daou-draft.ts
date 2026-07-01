@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireAuth } from './lib/auth.js'
+import { buildSwReqContent } from './lib/daou-form.js'
 
 // 다우오피스 전자결재 기안 생성 — 스태프 개발요청을 모아 기안 본문으로 전송.
 // 호출 성공 시 다우가 그룹웨어 기안 작성 팝업 URL로 302 리다이렉트 → 그 URL을 프론트에 반환.
@@ -18,8 +19,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'DAOU_CLIENT_ID / DAOU_CLIENT_SECRET 환경변수가 없습니다' })
   }
 
-  const { title, content } = (req.body || {}) as { title?: string; content?: string }
-  if (!title || !content) return res.status(400).json({ error: 'title, content는 필수입니다' })
+  const body = (req.body || {}) as {
+    title?: string
+    content?: string
+    dueDate?: string
+    policyUrl?: string
+    background?: string
+    requestContent?: string
+  }
+  const title = body.title
+  if (!title) return res.status(400).json({ error: 'title은 필수입니다' })
+  // content가 직접 오면 그대로, 아니면 소프트웨어 개발 요청서 템플릿에 값 주입
+  const content =
+    body.content ??
+    buildSwReqContent({
+      dueDate: body.dueDate,
+      policyUrl: body.policyUrl,
+      background: body.background,
+      requestContent: body.requestContent,
+    })
 
   const form = new FormData()
   form.append('clientId', CLIENT_ID)

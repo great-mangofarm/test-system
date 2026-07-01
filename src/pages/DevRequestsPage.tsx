@@ -31,25 +31,49 @@ import {
 
 const empty = { title: '', background: '', content: '', desiredDueDate: '', policyDocUrl: '' }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+interface DraftPayload {
+  title: string
+  dueDate: string
+  policyUrl: string
+  background: string
+  requestContent: string
 }
 
-// 선택한 요청들을 기안 본문(HTML)으로 구성
-function buildContent(reqs: DevRequest[]): string {
-  return reqs
+// 선택한 요청들을 다우 기안 양식 필드로 구성.
+// 1건이면 각 칸에 그대로, 여러 건이면 요청내용/배경 칸에 번호로 묶어 넣는다(단일칸 정보는 본문에 포함).
+function buildDraftPayload(reqs: DevRequest[]): DraftPayload {
+  if (reqs.length === 1) {
+    const r = reqs[0]
+    return {
+      title: r.title,
+      dueDate: r.desiredDueDate ?? '',
+      policyUrl: r.policyDocUrl ?? '',
+      background: r.background ?? '',
+      requestContent: r.content ?? '',
+    }
+  }
+  const background = reqs
+    .map((r, i) => `${i + 1}. ${r.title}\n${r.background || '-'}`)
+    .join('\n\n')
+  const requestContent = reqs
     .map((r, i) => {
-      const rows = [
-        `<p><b>${i + 1}. ${escapeHtml(r.title)}</b> (요청자: ${escapeHtml(r.createdByName)})</p>`,
-        r.background ? `<p>■ 요청 배경: ${escapeHtml(r.background)}</p>` : '',
-        r.content ? `<p>■ 요청 내용: ${escapeHtml(r.content)}</p>` : '',
-        r.desiredDueDate ? `<p>■ 희망 완료일: ${escapeHtml(r.desiredDueDate)}</p>` : '',
-        r.policyDocUrl ? `<p>■ 정책문서: ${escapeHtml(r.policyDocUrl)}</p>` : '',
-        '<p>────────────────────</p>',
+      const meta = [
+        r.desiredDueDate ? `희망 완료일: ${r.desiredDueDate}` : '',
+        r.policyDocUrl ? `정책문서: ${r.policyDocUrl}` : '',
+        `요청자: ${r.createdByName}`,
       ]
-      return rows.filter(Boolean).join('')
+        .filter(Boolean)
+        .join(' / ')
+      return `${i + 1}. ${r.title}\n${r.content || '-'}\n(${meta})`
     })
-    .join('')
+    .join('\n\n')
+  return {
+    title: `개발요청 ${reqs.length}건 - ${reqs[0].title} 외 ${reqs.length - 1}건`,
+    dueDate: '',
+    policyUrl: '',
+    background,
+    requestContent,
+  }
 }
 
 export default function DevRequestsPage() {
@@ -158,15 +182,11 @@ export default function DevRequestsPage() {
     const win = window.open('', '_blank')
     setSending(true)
     try {
-      const title =
-        chosen.length === 1
-          ? chosen[0].title
-          : `개발요청 ${chosen.length}건 (${chosen[0].title} 외)`
-      const content = buildContent(chosen)
+      const payload = buildDraftPayload(chosen)
       const res = await authedFetch('/api/daou-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok || !data.url) {
