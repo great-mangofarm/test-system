@@ -441,6 +441,15 @@ export default function HomePage() {
   }
 
   useEffect(() => { loadProducts() }, [])
+  // 기본 포커스: 사용자 표시 순서(개인 순서 반영)의 맨 위 프로덕트
+  useEffect(() => {
+    if (selectedProduct || products.length === 0) return
+    const visible = applyProductOrder(
+      products.filter((p) => canViewByRole(p.visibleRoles, user?.role)),
+      productOrder,
+    )
+    if (visible.length > 0) setSelectedProduct(visible[0])
+  }, [products, productOrder, selectedProduct, user?.role])
   useEffect(() => {
     if (selectedProduct) { loadSuites(selectedProduct.id); loadQaGroups(selectedProduct.id) }
     else { setSuites([]); setQaGroups([]) }
@@ -481,8 +490,7 @@ export default function HomePage() {
     try {
       const list = await getProducts()
       setProducts(list)
-      const firstVisible = list.find((p) => canViewByRole(p.visibleRoles, user?.role))
-      if (firstVisible) setSelectedProduct((prev) => prev ?? firstVisible)
+      // 기본 선택은 아래 effect에서 "사용자 표시 순서(맨 위)"로 지정
     } finally { setLoadingProducts(false) }
   }
 
