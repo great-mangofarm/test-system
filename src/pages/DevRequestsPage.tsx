@@ -26,54 +26,17 @@ import { toast } from '@/hooks/use-toast'
 import type { DevRequest } from '@/types'
 import {
   Plus, Send, Pencil, Trash2, LogOut, KeyRound, ChevronDown, ArrowLeft,
-  CheckCircle2, Circle, ExternalLink, Inbox,
+  CheckCircle2, Circle, Inbox, ArrowRight,
 } from 'lucide-react'
 
-const empty = { title: '', background: '', content: '', desiredDueDate: '', policyDocUrl: '' }
+const emptyItem = { title: '', asIs: '', toBe: '' }
+const emptySend = { title: '', dueDate: '', background: '', docUrl: '' }
 
-interface DraftPayload {
-  title: string
-  dueDate: string
-  policyUrl: string
-  background: string
-  requestContent: string
-}
-
-// 선택한 요청들을 다우 기안 양식 필드로 구성.
-// 1건이면 각 칸에 그대로, 여러 건이면 요청내용/배경 칸에 번호로 묶어 넣는다(단일칸 정보는 본문에 포함).
-function buildDraftPayload(reqs: DevRequest[]): DraftPayload {
-  if (reqs.length === 1) {
-    const r = reqs[0]
-    return {
-      title: r.title,
-      dueDate: r.desiredDueDate ?? '',
-      policyUrl: r.policyDocUrl ?? '',
-      background: r.background ?? '',
-      requestContent: r.content ?? '',
-    }
-  }
-  const background = reqs
-    .map((r, i) => `${i + 1}. ${r.title}\n${r.background || '-'}`)
+// 선택 항목들을 기안 요청내용 텍스트로 구성 (다우 쪽에서 개행→<br>, URL→링크 처리됨)
+function buildRequestContent(items: DevRequest[]): string {
+  return items
+    .map((it, i) => `${i + 1}. ${it.title}\n[AS-IS] ${it.asIs || '-'}\n[TO-BE] ${it.toBe || '-'}`)
     .join('\n\n')
-  const requestContent = reqs
-    .map((r, i) => {
-      const meta = [
-        r.desiredDueDate ? `희망 완료일: ${r.desiredDueDate}` : '',
-        r.policyDocUrl ? `정책문서: ${r.policyDocUrl}` : '',
-        `요청자: ${r.createdByName}`,
-      ]
-        .filter(Boolean)
-        .join(' / ')
-      return `${i + 1}. ${r.title}\n${r.content || '-'}\n(${meta})`
-    })
-    .join('\n\n')
-  return {
-    title: `개발요청 ${reqs.length}건 - ${reqs[0].title} 외 ${reqs.length - 1}건`,
-    dueDate: '',
-    policyUrl: '',
-    background,
-    requestContent,
-  }
 }
 
 export default function DevRequestsPage() {
@@ -82,18 +45,21 @@ export default function DevRequestsPage() {
   const [requests, setRequests] = useState<DevRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [sending, setSending] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<DevRequest | null>(null)
-  const [form, setForm] = useState(empty)
+  const [form, setForm] = useState(emptyItem)
   const [saving, setSaving] = useState(false)
+
+  const [sendOpen, setSendOpen] = useState(false)
+  const [sendForm, setSendForm] = useState(emptySend)
+  const [sending, setSending] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<DevRequest | null>(null)
   const [pwModalOpen, setPwModalOpen] = useState(false)
 
   const isManager = user?.role === 'admin' || user?.role === 'pm' // 완료 토글
-  const canGoHome = user && user.role !== 'staff'                  // 메인 이동(스태프 외)
+  const canGoHome = user && user.role !== 'staff'
 
   async function load() {
     setLoading(true)
@@ -104,36 +70,27 @@ export default function DevRequestsPage() {
 
   function openCreate() {
     setEditing(null)
-    setForm(empty)
+    setForm(emptyItem)
     setFormOpen(true)
   }
   function openEdit(r: DevRequest) {
     setEditing(r)
-    setForm({
-      title: r.title, background: r.background, content: r.content,
-      desiredDueDate: r.desiredDueDate ?? '', policyDocUrl: r.policyDocUrl ?? '',
-    })
+    setForm({ title: r.title, asIs: r.asIs, toBe: r.toBe })
     setFormOpen(true)
   }
 
   async function handleSave() {
     if (!user) return
-    if (!form.title.trim() || !form.content.trim()) {
-      toast({ title: '제목과 요청 내용은 필수입니다', variant: 'destructive' })
+    if (!form.title.trim() || !form.toBe.trim()) {
+      toast({ title: '제목과 TO-BE(요청 내용)는 필수입니다', variant: 'destructive' })
       return
     }
     setSaving(true)
     try {
-      const data = {
-        title: form.title.trim(),
-        background: form.background.trim(),
-        content: form.content.trim(),
-        desiredDueDate: form.desiredDueDate.trim(),
-        policyDocUrl: form.policyDocUrl.trim(),
-      }
+      const data = { title: form.title.trim(), asIs: form.asIs.trim(), toBe: form.toBe.trim() }
       if (editing) {
         await updateDevRequest(editing.id, data)
-        toast({ title: '요청 수정 완료' })
+        toast({ title: '항목 수정 완료' })
       } else {
         await createDevRequest({
           ...data,
@@ -142,7 +99,7 @@ export default function DevRequestsPage() {
           team: user.team ?? '',
           done: false,
         })
-        toast({ title: '요청 추가 완료' })
+        toast({ title: '항목 추가 완료' })
       }
       setFormOpen(false)
       await load()
@@ -175,27 +132,42 @@ export default function DevRequestsPage() {
     })
   }
 
-  async function handleSend() {
+  function openSend() {
+    const count = selected.size
+    if (count === 0) return
+    setSendForm({ ...emptySend, title: `개발 요청 ${count}건` })
+    setSendOpen(true)
+  }
+
+  async function confirmSend() {
     const chosen = requests.filter((r) => selected.has(r.id))
     if (chosen.length === 0) return
-    // 팝업 차단 방지: 클릭 제스처 내에서 빈 창을 먼저 연 뒤 URL을 채운다
+    if (!sendForm.title.trim()) {
+      toast({ title: '기안 제목을 입력하세요', variant: 'destructive' })
+      return
+    }
+    // 팝업 차단 방지: 클릭 제스처 내에서 빈 창 먼저 오픈
     const win = window.open('', '_blank')
     setSending(true)
     try {
-      const payload = buildDraftPayload(chosen)
+      const payload = {
+        title: sendForm.title.trim(),
+        dueDate: sendForm.dueDate.trim(),
+        policyUrl: sendForm.docUrl.trim(),
+        background: sendForm.background.trim(),
+        requestContent: buildRequestContent(chosen),
+      }
       const res = await authedFetch('/api/daou-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || '기안 생성 실패')
-      }
-      // 그룹웨어 기안 작성 팝업 (로그인된 사용자가 기안자)
+      if (!res.ok || !data.url) throw new Error(data.error || '기안 생성 실패')
       if (win) win.location.href = data.url
       else window.open(data.url, '_blank', 'noopener,noreferrer')
       toast({ title: '기안 작성 창을 열었습니다', description: '그룹웨어에서 결재선 확인 후 상신하세요' })
+      setSendOpen(false)
       setSelected(new Set())
     } catch (e) {
       if (win) win.close()
@@ -244,22 +216,15 @@ export default function DevRequestsPage() {
       {/* Toolbar */}
       <div className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
         <div className="text-sm text-slate-500">
-          요청을 작성하고, 여러 건을 선택해 하나의 기안으로 전송하세요.
+          개발 요청 항목(AS-IS → TO-BE)을 쌓아두고, 여러 개를 선택해 하나의 기안으로 전송하세요.
         </div>
         <div className="flex items-center gap-2">
-          {selectedCount > 0 && (
-            <span className="text-sm text-slate-600">{selectedCount}건 선택</span>
-          )}
-          <Button
-            variant="default"
-            size="sm"
-            disabled={selectedCount === 0 || sending}
-            onClick={handleSend}
-          >
-            <Send className="w-4 h-4" /> {sending ? '전송 중…' : '기안 보내기'}
+          {selectedCount > 0 && <span className="text-sm text-slate-600">{selectedCount}건 선택</span>}
+          <Button variant="default" size="sm" disabled={selectedCount === 0} onClick={openSend}>
+            <Send className="w-4 h-4" /> 기안 보내기
           </Button>
           <Button variant="outline" size="sm" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> 요청 추가
+            <Plus className="w-4 h-4" /> 항목 추가
           </Button>
         </div>
       </div>
@@ -271,7 +236,7 @@ export default function DevRequestsPage() {
             <div className="text-center text-slate-400 py-20">불러오는 중…</div>
           ) : requests.length === 0 ? (
             <div className="text-center text-slate-400 py-20">
-              아직 요청이 없습니다. "요청 추가"로 시작하세요.
+              아직 항목이 없습니다. "항목 추가"로 시작하세요.
             </div>
           ) : (
             requests.map((r) => {
@@ -293,27 +258,18 @@ export default function DevRequestsPage() {
                       )}
                       <span className="font-semibold text-slate-800">{r.title}</span>
                     </div>
-                    {r.content && (
-                      <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{r.content}</p>
-                    )}
-                    {r.background && (
-                      <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">
-                        <span className="text-slate-400">배경 · </span>{r.background}
-                      </p>
-                    )}
+                    <div className="mt-2 grid gap-1 text-sm">
+                      <div className="flex gap-2">
+                        <span className="shrink-0 text-xs font-semibold text-slate-400 mt-0.5 w-12">AS-IS</span>
+                        <span className="text-slate-600 whitespace-pre-wrap">{r.asIs || '-'}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="shrink-0 text-xs font-semibold text-sky-500 mt-0.5 w-12 inline-flex items-center gap-0.5"><ArrowRight className="w-3 h-3" />TO-BE</span>
+                        <span className="text-slate-800 whitespace-pre-wrap">{r.toBe || '-'}</span>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 flex-wrap">
                       <span>{r.createdByName}{r.team ? ` · ${r.team}` : ''}</span>
-                      {r.desiredDueDate && <span>희망완료 {r.desiredDueDate}</span>}
-                      {r.policyDocUrl && (
-                        <a
-                          href={r.policyDocUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-sky-600 hover:underline"
-                        >
-                          <ExternalLink className="w-3 h-3" /> 정책문서
-                        </a>
-                      )}
                       <span>{new Date(r.createdAt).toLocaleDateString('ko-KR')}</span>
                     </div>
                   </div>
@@ -342,34 +298,24 @@ export default function DevRequestsPage() {
         </div>
       </div>
 
-      {/* Create/Edit dialog */}
+      {/* 항목 추가/수정 */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? '요청 수정' : '요청 추가'}</DialogTitle>
+            <DialogTitle>{editing ? '항목 수정' : '항목 추가'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
               <Label>제목 *</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="요청 제목" />
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 법인회원 카드 발급 자동화" />
             </div>
             <div>
-              <Label>요청 내용 *</Label>
-              <Textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} rows={4} placeholder="무엇을 개발/수정해야 하나요?" />
+              <Label>AS-IS (현재)</Label>
+              <Textarea value={form.asIs} onChange={(e) => setForm({ ...form, asIs: e.target.value })} rows={2} placeholder="현재 어떻게 동작/처리되는지" />
             </div>
             <div>
-              <Label>요청 배경</Label>
-              <Textarea value={form.background} onChange={(e) => setForm({ ...form, background: e.target.value })} rows={2} placeholder="왜 필요한가요? (선택)" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>희망 완료일</Label>
-                <Input type="date" value={form.desiredDueDate} onChange={(e) => setForm({ ...form, desiredDueDate: e.target.value })} />
-              </div>
-              <div>
-                <Label>정책문서 링크</Label>
-                <Input value={form.policyDocUrl} onChange={(e) => setForm({ ...form, policyDocUrl: e.target.value })} placeholder="https://…" />
-              </div>
+              <Label>TO-BE (요청 내용) *</Label>
+              <Textarea value={form.toBe} onChange={(e) => setForm({ ...form, toBe: e.target.value })} rows={3} placeholder="어떻게 바뀌어야 하는지" />
             </div>
           </div>
           <DialogFooter>
@@ -379,12 +325,48 @@ export default function DevRequestsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm */}
+      {/* 기안 보내기 */}
+      <Dialog open={sendOpen} onOpenChange={setSendOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>기안 보내기 ({selectedCount}건)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label>기안 제목 *</Label>
+              <Input value={sendForm.title} onChange={(e) => setSendForm({ ...sendForm, title: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>희망 완료일</Label>
+                <Input type="date" value={sendForm.dueDate} onChange={(e) => setSendForm({ ...sendForm, dueDate: e.target.value })} />
+              </div>
+              <div>
+                <Label>요청 문서 URL</Label>
+                <Input value={sendForm.docUrl} onChange={(e) => setSendForm({ ...sendForm, docUrl: e.target.value })} placeholder="https://…" />
+              </div>
+            </div>
+            <div>
+              <Label>요청 배경</Label>
+              <Textarea value={sendForm.background} onChange={(e) => setSendForm({ ...sendForm, background: e.target.value })} rows={2} placeholder="이번 요청들의 공통 배경 (선택)" />
+            </div>
+            <div className="rounded-md bg-slate-50 border p-2 text-xs text-slate-500 max-h-32 overflow-auto whitespace-pre-wrap">
+              {buildRequestContent(requests.filter((r) => selected.has(r.id)))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendOpen(false)}>취소</Button>
+            <Button onClick={confirmSend} disabled={sending}>{sending ? '전송 중…' : '기안 작성 창 열기'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 삭제 확인 */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>요청을 삭제할까요?</AlertDialogTitle>
-            <AlertDialogDescription>"{deleteTarget?.title}" 요청이 삭제됩니다. 되돌릴 수 없습니다.</AlertDialogDescription>
+            <AlertDialogTitle>항목을 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>"{deleteTarget?.title}" 항목이 삭제됩니다. 되돌릴 수 없습니다.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>

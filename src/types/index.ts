@@ -32,14 +32,12 @@ export interface Product {
 
 export type DeployBatchStatus = 'planned' | 'deployed'
 
-// 스태프 개발요청 — 여러 건을 모아 다우오피스 기안으로 전송
+// 스태프 개발요청 항목 — AS-IS/TO-BE 단위로 쌓아두고, 여러 개를 모아 다우 기안 하나로 전송
 export interface DevRequest {
   id: string
-  title: string
-  background: string       // 요청 배경
-  content: string          // 요청 내용
-  desiredDueDate?: string  // 희망 완료일
-  policyDocUrl?: string    // 정책문서 링크
+  title: string            // 항목 제목
+  asIs: string             // 현재 (AS-IS)
+  toBe: string             // 요청/개선 (TO-BE)
   createdBy: string        // uid
   createdByName: string
   team?: string
