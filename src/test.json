@@ -1,0 +1,43 @@
+{
+  "documents": [
+    {
+      "address": {
+        "address_name": "서울 마포구 구수동 101-1",
+        "b_code": "1144011300",
+        "h_code": "1144063000",
+        "main_address_no": "101",
+        "mountain_yn": "N",
+        "region_1depth_name": "서울",
+        "region_2depth_name": "마포구",
+        "region_3depth_h_name": "신수동",
+        "region_3depth_name": "구수동",
+        "sub_address_no": "1",
+        "x": "126.931543700803",
+        "y": "37.5448084337088"
+      },
+      "address_name": "서울 마포구 창전로 28",
+      "address_type": "ROAD_ADDR",
+      "road_address": {
+        "address_name": "서울 마포구 창전로 28",
+        "building_name": "이성빌딩",
+        "main_building_no": "28",
+        "region_1depth_name": "서울",
+        "region_2depth_name": "마포구",
+        "region_3depth_name": "구수동",
+        "road_name": "창전로",
+        "sub_building_no": "",
+        "underground_yn": "N",
+        "x": "126.931543700803",
+        "y": "37.5448084337088",
+        "zone_no": "04093"
+      },
+      "x": "126.931543700803",
+      "y": "37.5448084337088"
+    }
+  ],
+  "meta": {
+    "is_end": true,
+    "pageable_count": 1,
+    "total_count": 1
+  }
+}

@@ -55,9 +55,9 @@ function buildADF(area: string, steps: string, expectedResult: string, actualRes
   }
 }
 
-// HTML → ADF paragraph 노드 배열 (줄바꿈마다 별도 paragraph)
-function htmlToADFParagraphs(html: string): unknown[] {
-  const text = stripHtml(html)
+// 평문 조각 → ADF paragraph 노드 배열 (줄바꿈마다 별도 paragraph)
+function textToParagraphs(chunk: string): unknown[] {
+  const text = stripHtml(chunk)
   if (!text.trim()) return []
   return text
     .split('\n')
@@ -66,15 +66,44 @@ function htmlToADFParagraphs(html: string): unknown[] {
     .map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line }] }))
 }
 
+// HTML → ADF 블록 노드 배열. <ul>/<ol> 은 ADF bulletList/orderedList 로 보존, 그 외는 문단.
+function htmlToADFBlocks(html: string): unknown[] {
+  if (!html || !html.trim()) return []
+  const nodes: unknown[] = []
+  const blockRe = /<(ul|ol)\b[^>]*>([\s\S]*?)<\/\1>/gi
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = blockRe.exec(html)) !== null) {
+    // 리스트 앞 텍스트 → 문단
+    nodes.push(...textToParagraphs(html.slice(last, m.index)))
+    const listType = m[1].toLowerCase() === 'ol' ? 'orderedList' : 'bulletList'
+    const items = Array.from(m[2].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)).map((li) => {
+      const paras = textToParagraphs(li[1])
+      return {
+        type: 'listItem',
+        content: paras.length > 0 ? paras : [{ type: 'paragraph', content: [] }],
+      }
+    })
+    if (items.length > 0) {
+      nodes.push(listType === 'orderedList'
+        ? { type: 'orderedList', attrs: { order: 1 }, content: items }
+        : { type: 'bulletList', content: items })
+    }
+    last = blockRe.lastIndex
+  }
+  nodes.push(...textToParagraphs(html.slice(last)))
+  return nodes
+}
+
 function buildIssueADF(background: string, requirements: string, figmaLink: string, featureSpec: string) {
   const content: unknown[] = []
 
   function addSection(label: string, html: string) {
-    const paras = htmlToADFParagraphs(html)
-    if (paras.length === 0) return
+    const blocks = htmlToADFBlocks(html)
+    if (blocks.length === 0) return
     content.push(
       { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: label }] },
-      ...paras,
+      ...blocks,
     )
   }
 
